@@ -2,15 +2,10 @@
 Region processing module for neural data analysis.
 """
 
-# from .region_extractor import (
-#     get_brain_regions, 
-#     brain_region_select, 
-#     create_region_mapping, 
-#     create_region_channel_mapping
-# )
-
-from .epochs_extractor import extract_region_specific_epochs, plot_region_specific_epochs
-
+from .epochs_extractor import (
+    extract_region_specific_epochs, 
+    plot_region_specific_epochs
+)
 
 def analyze_region_specific_data(region_labels, subject_id_list, sampling_frequency, mapping_events, 
                               event_dict_gest, trigger_type, tmin, tmax, plot=False):
