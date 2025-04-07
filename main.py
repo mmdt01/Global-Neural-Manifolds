@@ -8,7 +8,6 @@ neural manifold visualization.
 """
 
 import os
-import sys
 import argparse
 from utils.helpers import ensure_dir
 
@@ -16,11 +15,13 @@ from region_processing import analyze_region_specific_data
 from analysis import (
     perform_time_frequency_analysis,
     analyze_neural_manifolds,
-    analyze_gesture_manifolds
+    analyze_gesture_manifolds,
+    compare_subject_manifolds
 )
 from visualization import (
     plot_tf_summary,
-    plot_manifold_comparison
+    plot_manifold_comparison,
+    visualize_canonical_correlations
 )
 
 def parse_arguments():
@@ -40,7 +41,7 @@ def parse_arguments():
         '--subjects', 
         type=int, 
         nargs='+',
-        default=[2, 3, 4, 10, 13, 17, 25, 29, 32, 41, 45],
+        default=[2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 29, 30, 31, 32, 34, 35, 36, 37, 39, 41, 45], # all subjects
         help='List of subject IDs to analyze'
     )
     
@@ -78,7 +79,7 @@ def parse_arguments():
         '--analysis', 
         type=str,
         default='all',
-        choices=['tf', 'manifold', 'gesture', 'all'],
+        choices=['tf', 'manifold', 'gesture', 'align-manifolds', 'all'],
         help='Type of analysis to run'
     )
     
@@ -109,9 +110,11 @@ def main():
     tf_dir = os.path.join(args.output_dir, 'tf_plots')
     manifold_dir = os.path.join(args.output_dir, 'manifold_plots')
     gesture_dir = os.path.join(args.output_dir, 'gesture_manifold_plots')
+    align_dir = os.path.join(args.output_dir, 'aligned_manifolds_plots')
     ensure_dir(tf_dir)
     ensure_dir(manifold_dir)
     ensure_dir(gesture_dir)
+    ensure_dir(align_dir)
     
     # Define parameters
     region_labels = args.regions
@@ -227,11 +230,8 @@ def main():
                     region_labels,
                     output_dir=manifold_dir
                 )
-        
-        # Do CCA Alignment here?
-
     
-    if args.analysis in ['gesture', 'all']:
+    if args.analysis in ['gesture-manifolds', 'all']:
         print("\nAnalyzing gesture-specific neural manifolds...")
         output_dir = None if args.plot else gesture_dir
         gesture_manifold_results = analyze_gesture_manifolds(
@@ -245,6 +245,38 @@ def main():
             output_dir=output_dir
         )
     
+    # include cca manifold aligning as a analysis parameter
+    if args.analysis in ['align-manifolds', 'all']:
+        print("\nComputing general manifolds and aligning using CCA ...")
+        output_dir = None if args.plot else align_dir
+        # step 1: compute overall manifold
+        print("... Step 1: computing neural manifolds ...")
+        manifold_results = analyze_neural_manifolds(
+            region_epochs,
+            region_channels_dict,
+            region_labels,
+            bands=['delta', 'beta', 'high_gamma'],
+            n_components=3,
+            downsample_factor=1,
+            output_dir=output_dir
+        )
+        # step 2: align and compare manifolds between subjects
+        print("... Step 2: aligning manifolds across subjects using CCA ...")
+        cca_results = compare_subject_manifolds(
+            manifold_results,
+            subject_id_list, 
+            bands=['delta', 'beta', 'high_gamma'],
+            output_dir=output_dir
+        )
+        # step 3: visualize the CCA results
+        print("... Step 3: visualizing the CCA results ...")
+        visualize_canonical_correlations(
+            cca_results, 
+            bands=['delta', 'beta', 'high_gamma'], 
+            output_dir=output_dir
+        )
+
+
     print("\nAnalysis completed successfully!")
 
 if __name__ == "__main__":
