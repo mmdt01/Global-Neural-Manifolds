@@ -264,7 +264,6 @@ def main():
             region_epochs,
             region_channels_dict,
             region_labels,
-            # bands=['delta', 'beta', 'high_gamma'],
             frequency_bands,
             n_components=3,
             downsample_factor=1,
@@ -275,7 +274,6 @@ def main():
         cca_results = compare_subject_manifolds(
             manifold_results,
             subject_id_list, 
-            # bands=['delta', 'beta', 'high_gamma'],
             frequency_bands,
             output_dir=output_dir
         )
@@ -283,7 +281,6 @@ def main():
         print("... Step 3: visualizing the CCA results ...")
         visualize_canonical_correlations(
             cca_results, 
-            # bands=['delta', 'beta', 'high_gamma'], 
             frequency_bands,
             output_dir=output_dir
         )
