@@ -9,7 +9,7 @@ neural manifold visualization.
 
 import os
 import argparse
-from utils.helpers import ensure_dir
+from utils.helpers import ensure_dir, get_region_lists, region_groups
 
 from region_processing import analyze_region_specific_data
 from analysis import (
@@ -45,13 +45,14 @@ def parse_arguments():
         default=[2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 29, 30, 31, 32, 34, 35, 36, 37, 39, 41, 45], # all subjects
         help='List of subject IDs to analyze'
     )
-    
+
     parser.add_argument(
         '--regions', 
         type=str, 
         nargs='+',
-        default=["ctx-rh-precentral", "wm-rh-precentral"],
-        help='List of brain region labels to extract data for'
+        choices=list(region_groups.keys()) + ["all"],
+        default=["precentral-rh"],
+        help='List of region groups to analyze (e.g., precentral-rh, postcentral-lh)'
     )
 
     parser.add_argument(
@@ -140,9 +141,11 @@ def main():
     ensure_dir(manifold_dir)
     ensure_dir(gesture_dir)
     ensure_dir(align_dir)
+
+    # Get region lists to analyze
+    region_lists = get_region_lists(args)
     
     # Define parameters
-    region_labels = args.regions
     subject_id_list = args.subjects
     sampling_frequency = 1000
     trigger_type = args.trigger
@@ -160,181 +163,204 @@ def main():
     }
     mapping_events = {1: "elbow", 2: "scissor", 3: "rock", 4: "rotation", 5: "thumb"}
     
-    # Extract and analyze region-specific data
-    print(f"Extracting data for regions: {region_labels}")
-    print(f"Using subjects: {subject_id_list}")
+    # Initialize dictionaries to store all region results
+    all_region_epochs = {}
+    all_region_channels_dict = {}
     
-    region_epochs, region_channels_dict = analyze_region_specific_data(
-        region_labels,
-        subject_id_list,
-        sampling_frequency,
-        mapping_events,
-        event_dict_gest,
-        trigger_type,
-        tmin,
-        tmax,
-        plot=args.plot
-    )
-    
-    # Print a summary of the results
-    print("\nSummary of extracted region-specific data:")
-    print(f"Total subjects with data: {len(region_epochs)}")
-
-    for subject_id in region_epochs:
-        print(f"\nSubject {subject_id}:")
-        print(f"  Number of channels: {len(region_channels_dict[subject_id])}")
-        print(f"  Number of epochs: {len(region_epochs[subject_id])}")
-        print(f"  Epoch duration: {region_epochs[subject_id].times[0]:.2f}s to {region_epochs[subject_id].times[-1]:.2f}s")
-        print(f"  Number of time points: {len(region_epochs[subject_id].times)}")
+    # Extract and analyze data for each region group
+    for group_name, region_labels in region_lists.items():
+        print(f"\n===== Processing Region Group: {group_name} =====")
+        print(f"Extracting data for regions: {region_labels}")
+        print(f"Using subjects: {subject_id_list}")
         
-        # Print event counts
-        for event_name, event_id in event_dict_gest.items():
-            event_count = len(region_epochs[subject_id][event_name])
-            print(f"  {event_name} events: {event_count}")
-
-    
-    ###################################### analysis ######################################
-
-    # Run selected analyses based on command line arguments
-    if args.analysis in ['none']:
-        print("\nNo analysis method selected ...")
-
-    if args.analysis in ['visualize-band-power', 'all']:
-        print("\nVisualizing signal transformation from raw to filtered to instantaneous band power ...")
-        # Generate visualizations for each subject
-        for subject_id, epochs in region_epochs.items():
-            # Skip if no epochs for this subject
-            if len(epochs) == 0:
-                print(f"No epochs for Subject {subject_id}, skipping...")
-                continue
-
-            # Create a subject-specific output directory
-            subject_dir = os.path.join(bandpower_dir, f"subject_{subject_id}")
-            ensure_dir(subject_dir)
-            
-            # Region label for titles
-            region_label = "_".join(region_labels)
-            
-            # Run all visualizations with the high-level function
-            figures = visualize_signal_transform(
-                epochs,
-                subject_id,
-                region_label,
-                bands=frequency_bands,
-                n_channels=args.n_channels,
-                n_epochs=args.n_epochs,
-                show_processing_steps=True,
-                show_multi_epoch=True,
-                show_comparative_bands=True,
-                output_dir=subject_dir
-            )
-
-    if args.analysis in ['tf', 'all']:
-        print("\nRunning time-frequency analysis...")
-        output_dir = None if args.plot else tf_dir
-        # re-extract epochs for time-frequency analysis with correct tmin/tmax
-        tf_region_epochs, tf_region_channels_dict = analyze_region_specific_data(
+        # Create group-specific output directories
+        group_bandpower_dir = os.path.join(bandpower_dir, group_name)
+        group_tf_dir = os.path.join(tf_dir, group_name)
+        group_manifold_dir = os.path.join(manifold_dir, group_name)
+        group_gesture_dir = os.path.join(gesture_dir, group_name)
+        group_align_dir = os.path.join(align_dir, group_name)
+        ensure_dir(group_bandpower_dir)
+        ensure_dir(group_tf_dir)
+        ensure_dir(group_manifold_dir)
+        ensure_dir(group_gesture_dir)
+        ensure_dir(group_align_dir)
+        
+        # Extract and analyze region-specific data
+        region_epochs, region_channels_dict = analyze_region_specific_data(
             region_labels,
             subject_id_list,
             sampling_frequency,
             mapping_events,
             event_dict_gest,
             trigger_type,
-            tmin=-1.0,
-            tmax=3.0,
-            plot=False
-        )
-        tfr_power_dict = perform_time_frequency_analysis(
-            tf_region_epochs,
-            tf_region_channels_dict,
-            region_labels,
-            tmin=-1.0,
-            tmax=3.0,
-            output_dir=output_dir
+            tmin,
+            tmax,
+            plot=args.plot
         )
         
-        # Generate summary visualization with all subjects
-        plot_tf_summary(
-            tfr_power_dict, 
-            region_channels_dict, 
-            region_labels, 
-            baseline=(-0.5, 0.0),
-            output_dir=tf_dir
-        )
+        # Store the results for this region group
+        all_region_epochs[group_name] = region_epochs
+        all_region_channels_dict[group_name] = region_channels_dict
+        
+        # Print a summary of the results
+        print(f"\nSummary of extracted data for {group_name}:")
+        print(f"Total subjects with data: {len(region_epochs)}")
+
+        for subject_id in region_epochs:
+            print(f"\nSubject {subject_id}:")
+            print(f"  Number of channels: {len(region_channels_dict[subject_id])}")
+            print(f"  Number of epochs: {len(region_epochs[subject_id])}")
+            print(f"  Epoch duration: {region_epochs[subject_id].times[0]:.2f}s to {region_epochs[subject_id].times[-1]:.2f}s")
+            print(f"  Number of time points: {len(region_epochs[subject_id].times)}")
+            
+            # Print event counts
+            for event_name, event_id in event_dict_gest.items():
+                event_count = len(region_epochs[subject_id][event_name])
+                print(f"  {event_name} events: {event_count}")
+
     
-    if args.analysis in ['manifold', 'all']:
-        print("\nAnalyzing overall neural manifolds...")
-        output_dir = None if args.plot else manifold_dir
-        manifold_results = analyze_neural_manifolds(
-            region_epochs,
-            region_channels_dict,
-            region_labels,
-            bands=['delta', 'beta', 'high_gamma'],
-            n_components=3,
-            downsample_factor=1,
-            output_dir=output_dir
-        )
-        
-        # Generate comparison visualizations for each band
-        for band_name in manifold_results:
-            if len(manifold_results[band_name]) > 0:
-                # Get times from first subject's epochs (with downsampling)
-                first_subject = list(region_epochs.keys())[0]
-                times = region_epochs[first_subject].times[::1]  # No downsampling in this case
+        ###################################### analysis ######################################
+
+        # Run selected analyses based on command line arguments
+        if args.analysis in ['none']:
+            print(f"\nNo analysis method selected for {group_name}...")
+
+        if args.analysis in ['visualize-band-power', 'all']:
+            print(f"\nVisualizing signal transformation for {group_name}...")
+            # Generate visualizations for each subject
+            for subject_id, epochs in region_epochs.items():
+                # Skip if no epochs for this subject
+                if len(epochs) == 0:
+                    print(f"No epochs for Subject {subject_id}, skipping...")
+                    continue
+
+                # Create a subject-specific output directory
+                subject_dir = os.path.join(bandpower_dir, f"subject_{subject_id}")
+                ensure_dir(subject_dir)
                 
-                # Plot comparison of subjects for this band
-                plot_manifold_comparison(
-                    manifold_results[band_name], 
-                    band_name, 
-                    times, 
-                    region_labels,
-                    output_dir=manifold_dir
+                # Region label for titles
+                region_label = group_name
+                
+                # Run all visualizations with the high-level function
+                figures = visualize_signal_transform(
+                    epochs,
+                    subject_id,
+                    region_label,
+                    bands=frequency_bands,
+                    n_channels=args.n_channels,
+                    n_epochs=args.n_epochs,
+                    show_processing_steps=True,
+                    show_multi_epoch=True,
+                    show_comparative_bands=True,
+                    output_dir=subject_dir
                 )
-    
-    if args.analysis in ['gesture-manifolds', 'all']:
-        print("\nAnalyzing gesture-specific neural manifolds...")
-        output_dir = None if args.plot else gesture_dir
-        gesture_manifold_results = analyze_gesture_manifolds(
-            region_epochs,
-            region_channels_dict,
-            region_labels,
-            bands=['delta', 'beta', 'high_gamma'],
-            gestures=list(event_dict_gest.keys()),
-            n_components=3,
-            downsample_factor=1,
-            output_dir=output_dir
-        )
-    
-    # include cca manifold aligning as a analysis parameter
-    if args.analysis in ['align-manifolds', 'all']:
-        print("\nComputing general manifolds and aligning using CCA ...")
-        output_dir = None if args.plot else align_dir
-        # step 1: compute overall manifold
-        print("... Step 1: computing neural manifolds ...")
-        manifold_results = analyze_neural_manifolds(
-            region_epochs,
-            region_channels_dict,
-            region_labels,
-            frequency_bands,
-            n_components=3,
-            downsample_factor=1,
-            output_dir=output_dir
-        )
-        # step 2: align and compare manifolds between subjects
-        print("... Step 2: aligning manifolds across subjects using CCA ...")
-        cca_results = compare_subject_manifolds(
-            manifold_results,
-            subject_id_list, 
-            frequency_bands,
-            output_dir=output_dir
-        )
-        # step 3: visualize the CCA results
-        print("... Step 3: visualizing the CCA results ...")
-        visualize_canonical_correlations(
-            cca_results, 
-            frequency_bands,
-            output_dir=output_dir
-        )
+
+        if args.analysis in ['tf', 'all']:
+            print(f"\nRunning time-frequency analysis for {group_name}...")
+            output_dir = None if args.plot else group_tf_dir
+            # re-extract epochs for time-frequency analysis with correct tmin/tmax
+            tf_region_epochs, tf_region_channels_dict = analyze_region_specific_data(
+                region_labels,
+                subject_id_list,
+                sampling_frequency,
+                mapping_events,
+                event_dict_gest,
+                trigger_type,
+                tmin=-1.0,
+                tmax=3.0,
+                plot=False
+            )
+            tfr_power_dict = perform_time_frequency_analysis(
+                tf_region_epochs,
+                tf_region_channels_dict,
+                region_labels,
+                tmin=-1.0,
+                tmax=3.0,
+                output_dir=output_dir
+            )
+            
+            # Generate summary visualization with all subjects
+            plot_tf_summary(
+                tfr_power_dict, 
+                region_channels_dict, 
+                region_labels, 
+                baseline=(-0.5, 0.0),
+                output_dir=group_tf_dir
+            )
+        
+        if args.analysis in ['manifold', 'all']:
+            print(f"\nAnalyzing overall neural manifolds for {group_name}...")
+            output_dir = None if args.plot else group_manifold_dir
+            manifold_results = analyze_neural_manifolds(
+                region_epochs,
+                region_channels_dict,
+                region_labels,
+                bands=['delta', 'beta', 'high_gamma'],
+                n_components=3,
+                downsample_factor=1,
+                output_dir=output_dir
+            )
+            
+            # Generate comparison visualizations for each band
+            for band_name in manifold_results:
+                if len(manifold_results[band_name]) > 0:
+                    # Get times from first subject's epochs (with downsampling)
+                    first_subject = list(region_epochs.keys())[0]
+                    times = region_epochs[first_subject].times[::1]  # No downsampling in this case
+                    
+                    # Plot comparison of subjects for this band
+                    plot_manifold_comparison(
+                        manifold_results[band_name], 
+                        band_name, 
+                        times, 
+                        region_labels,
+                        output_dir=group_manifold_dir
+                    )
+        
+        if args.analysis in ['gesture-manifolds', 'all']:
+            print(f"\nAnalyzing gesture-specific neural manifolds for {group_name}...")
+            output_dir = None if args.plot else group_gesture_dir
+            gesture_manifold_results = analyze_gesture_manifolds(
+                region_epochs,
+                region_channels_dict,
+                region_labels,
+                bands=['delta', 'beta', 'high_gamma'],
+                gestures=list(event_dict_gest.keys()),
+                n_components=3,
+                downsample_factor=1,
+                output_dir=output_dir
+            )
+        
+        # include cca manifold aligning as a analysis parameter
+        if args.analysis in ['align-manifolds', 'all']:
+            print(f"\nComputing general manifolds and aligning using CCA for {group_name}...")
+            output_dir = None if args.plot else group_align_dir
+            # step 1: compute overall manifold
+            print("... Step 1: computing neural manifolds ...")
+            manifold_results = analyze_neural_manifolds(
+                region_epochs,
+                region_channels_dict,
+                region_labels,
+                frequency_bands,
+                n_components=3,
+                downsample_factor=1,
+                output_dir=output_dir
+            )
+            # step 2: align and compare manifolds between subjects
+            print("... Step 2: aligning manifolds across subjects using CCA ...")
+            cca_results = compare_subject_manifolds(
+                manifold_results,
+                subject_id_list, 
+                frequency_bands,
+                output_dir=output_dir
+            )
+            # step 3: visualize the CCA results
+            print("... Step 3: visualizing the CCA results ...")
+            visualize_canonical_correlations(
+                cca_results, 
+                frequency_bands,
+                output_dir=output_dir
+            )
 
 
     print("\nAnalysis completed successfully!")
