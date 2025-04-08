@@ -52,6 +52,14 @@ def parse_arguments():
         default=["ctx-rh-precentral", "wm-rh-precentral"],
         help='List of brain region labels to extract data for'
     )
+
+    parser.add_argument(
+        '--bands',
+        type=str,
+        nargs='+',
+        default=['delta', 'beta', 'high_gamma'],
+        help='List of frequency bands to extract for manifold analysis'
+    )
     
     parser.add_argument(
         '--trigger', 
@@ -121,6 +129,7 @@ def main():
     subject_id_list = args.subjects
     sampling_frequency = 1000
     trigger_type = args.trigger
+    frequency_bands = args.bands
     tmin = args.tmin
     tmax = args.tmax
     
@@ -255,7 +264,8 @@ def main():
             region_epochs,
             region_channels_dict,
             region_labels,
-            bands=['delta', 'beta', 'high_gamma'],
+            # bands=['delta', 'beta', 'high_gamma'],
+            frequency_bands,
             n_components=3,
             downsample_factor=1,
             output_dir=output_dir
@@ -265,14 +275,16 @@ def main():
         cca_results = compare_subject_manifolds(
             manifold_results,
             subject_id_list, 
-            bands=['delta', 'beta', 'high_gamma'],
+            # bands=['delta', 'beta', 'high_gamma'],
+            frequency_bands,
             output_dir=output_dir
         )
         # step 3: visualize the CCA results
         print("... Step 3: visualizing the CCA results ...")
         visualize_canonical_correlations(
             cca_results, 
-            bands=['delta', 'beta', 'high_gamma'], 
+            # bands=['delta', 'beta', 'high_gamma'], 
+            frequency_bands,
             output_dir=output_dir
         )
 
