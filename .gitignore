@@ -319,3 +319,10 @@ preprocessed/P5/preprocessed2.mat
 preprocessed/P8/preprocessed1.mat
 preprocessed/P8/preprocessed2.mat
 visualization/__pycache__/manifold_stats.cpython-39.pyc
+analysis/__pycache__/__init__.cpython-312.pyc
+analysis/__pycache__/time_frequency.cpython-312.pyc
+region_processing/__pycache__/__init__.cpython-312.pyc
+region_processing/__pycache__/epochs_extractor.cpython-312.pyc
+region_processing/__pycache__/region_extractor.cpython-312.pyc
+utils/__pycache__/__init__.cpython-312.pyc
+utils/__pycache__/helpers.cpython-312.pyc
