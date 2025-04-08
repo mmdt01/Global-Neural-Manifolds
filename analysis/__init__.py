@@ -1,6 +1,7 @@
 """
 Analysis module for neural data.
 """
+import os
 import numpy as np
 
 from .time_frequency import compute_time_frequency
@@ -8,6 +9,11 @@ from .manifold import (
     compute_neural_manifold,
     compute_gesture_manifolds,
     align_subject_manifolds_with_cca
+)
+from .band_power_viz import (
+    visualize_band_power_processing,
+    visualize_multi_epoch_band_power,
+    visualize_comparative_bands
 )
 
 def perform_time_frequency_analysis(region_epochs, region_channels_dict, region_labels,
@@ -250,3 +256,132 @@ def compare_subject_manifolds(manifold_results, subject_ids, bands=None, output_
     
     return cca_results
 
+def visualize_signal_transform(epochs, subject_id, region_label, 
+                             bands=None, 
+                             channel_indices=None, n_channels=4,
+                             epoch_indices=None, n_epochs=4,
+                             show_processing_steps=True,
+                             show_multi_epoch=True, 
+                             show_comparative_bands=True,
+                             downsample_factor=1,
+                             output_dir=None):
+    """
+    High-level function to run all three band power visualization functions.
+    
+    Parameters:
+    -----------
+    epochs : mne.Epochs
+        MNE Epochs object containing the data
+    subject_id : str or int
+        Subject ID for plot titles
+    region_label : str
+        Brain region label for plot titles
+    bands : list, optional
+        List of frequency bands to visualize. If None, uses ['delta', 'beta', 'high_gamma']
+    channel_indices : list, optional
+        List of specific channel indices to visualize. If None, first n_channels will be used.
+    n_channels : int, optional
+        Number of channels to use if channel_indices is None
+    epoch_indices : list, optional
+        List of specific epoch indices to visualize. If None, first n_epochs will be used.
+    n_epochs : int, optional
+        Number of epochs to use if epoch_indices is None
+    show_processing_steps : bool, optional
+        Whether to run visualize_band_power_processing
+    show_multi_epoch : bool, optional
+        Whether to run visualize_multi_epoch_band_power
+    show_comparative_bands : bool, optional
+        Whether to run visualize_comparative_bands
+    downsample_factor : int, optional
+        Factor by which to downsample the result
+    output_dir : str, optional
+        Directory to save plots. If None, plots are displayed but not saved.
+        
+    Returns:
+    --------
+    figures : dict
+        Dictionary mapping visualization types to lists of figure objects
+    """
+    # Set default bands if not provided
+    if bands is None:
+        bands = ['delta', 'beta', 'high_gamma']
+    
+    # Choose channel indices
+    if channel_indices is None:
+        channel_indices = list(range(min(n_channels, len(epochs.ch_names))))
+    
+    # Choose epoch indices
+    if epoch_indices is None:
+        epoch_indices = list(range(min(n_epochs, len(epochs))))
+    
+    # Create output directory if specified
+    if output_dir is not None:
+        os.makedirs(output_dir, exist_ok=True)
+        
+    # Initialize dictionary to store figures
+    figures = {
+        'processing_steps': [],
+        'multi_epoch': [],
+        'comparative_bands': []
+    }
+    
+    # Print information about what will be visualized
+    print(f"\nGenerating signal transformation visualizations for Subject {subject_id}:")
+    print(f"  Region: {region_label}")
+    print(f"  Bands: {bands}")
+    print(f"  Selected channels: {channel_indices}")
+    print(f"  Selected epochs: {epoch_indices}")
+    
+    # 1. Visualize processing steps for each band
+    if show_processing_steps:
+        print("\nVisualizing band power processing steps...")
+        for band_name in bands:
+            for epoch_idx in epoch_indices[:1]:  # Just use the first epoch for processing steps
+                fig = visualize_band_power_processing(
+                    epochs, 
+                    band_name, 
+                    subject_id, 
+                    region_label,
+                    channels=channel_indices,
+                    example_epoch=epoch_idx,
+                    downsample_factor=downsample_factor,
+                    output_dir=output_dir
+                )
+                figures['processing_steps'].append(fig)
+    
+    # 2. Visualize multiple epochs for each band and channel
+    if show_multi_epoch:
+        print("\nVisualizing multi-epoch band power...")
+        for band_name in bands:
+            for channel_idx in channel_indices[:1]:  # Just use the first channel for multi-epoch
+                fig = visualize_multi_epoch_band_power(
+                    epochs,
+                    band_name,
+                    subject_id,
+                    region_label,
+                    channel_idx=channel_idx,
+                    n_epochs=len(epoch_indices),
+                    downsample_factor=downsample_factor,
+                    output_dir=output_dir
+                )
+                figures['multi_epoch'].append(fig)
+    
+    # 3. Visualize comparative bands for each channel and epoch
+    if show_comparative_bands:
+        print("\nVisualizing comparative frequency bands...")
+        for channel_idx in channel_indices[:1]:  # Just use the first channel for comparative bands
+            for epoch_idx in epoch_indices[:1]:  # Just use the first epoch for comparative bands
+                fig = visualize_comparative_bands(
+                    epochs,
+                    subject_id,
+                    region_label,
+                    channel_idx=channel_idx,
+                    epoch_idx=epoch_idx,
+                    bands=bands,
+                    output_dir=output_dir
+                )
+                figures['comparative_bands'].append(fig)
+    
+    print("\nVisualization complete!")
+    
+    return figures

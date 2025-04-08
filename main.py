@@ -16,7 +16,8 @@ from analysis import (
     perform_time_frequency_analysis,
     analyze_neural_manifolds,
     analyze_gesture_manifolds,
-    compare_subject_manifolds
+    compare_subject_manifolds,
+    visualize_signal_transform
 )
 from visualization import (
     plot_tf_summary,
@@ -86,8 +87,8 @@ def parse_arguments():
     parser.add_argument(
         '--analysis', 
         type=str,
-        default='all',
-        choices=['tf', 'manifold', 'gesture', 'align-manifolds', 'all'],
+        default='none',
+        choices=['none', 'visualize-band-power', 'tf', 'manifold', 'gesture', 'align-manifolds', 'all'],
         help='Type of analysis to run'
     )
     
@@ -103,6 +104,20 @@ def parse_arguments():
         action='store_true',
         help='Plot results interactively'
     )
+
+    parser.add_argument(
+        '--n-channels',
+        type=int,
+        default=4,
+        help='Number of channels to visualize in band-power plots'
+    )
+    
+    parser.add_argument(
+        '--n-epochs',
+        type=int,
+        default=4,
+        help='Number of epochs to visualize in band-power plots'
+    )
     
     return parser.parse_args()
 
@@ -115,10 +130,12 @@ def main():
     
     # Create output directories
     ensure_dir(args.output_dir)
+    bandpower_dir = os.path.join(args.output_dir, 'band_power_plots')
     tf_dir = os.path.join(args.output_dir, 'tf_plots')
     manifold_dir = os.path.join(args.output_dir, 'manifold_plots')
     gesture_dir = os.path.join(args.output_dir, 'gesture_manifold_plots')
     align_dir = os.path.join(args.output_dir, 'aligned_manifolds_plots')
+    ensure_dir(bandpower_dir)
     ensure_dir(tf_dir)
     ensure_dir(manifold_dir)
     ensure_dir(gesture_dir)
@@ -174,10 +191,44 @@ def main():
         for event_name, event_id in event_dict_gest.items():
             event_count = len(region_epochs[subject_id][event_name])
             print(f"  {event_name} events: {event_count}")
+
     
-    ################### analysis ###################
+    ###################################### analysis ######################################
 
     # Run selected analyses based on command line arguments
+    if args.analysis in ['none']:
+        print("\nNo analysis method selected ...")
+
+    if args.analysis in ['visualize-band-power', 'all']:
+        print("\nVisualizing signal transformation from raw to filtered to instantaneous band power ...")
+        # Generate visualizations for each subject
+        for subject_id, epochs in region_epochs.items():
+            # Skip if no epochs for this subject
+            if len(epochs) == 0:
+                print(f"No epochs for Subject {subject_id}, skipping...")
+                continue
+
+            # Create a subject-specific output directory
+            subject_dir = os.path.join(bandpower_dir, f"subject_{subject_id}")
+            ensure_dir(subject_dir)
+            
+            # Region label for titles
+            region_label = "_".join(region_labels)
+            
+            # Run all visualizations with the high-level function
+            figures = visualize_signal_transform(
+                epochs,
+                subject_id,
+                region_label,
+                bands=frequency_bands,
+                n_channels=args.n_channels,
+                n_epochs=args.n_epochs,
+                show_processing_steps=True,
+                show_multi_epoch=True,
+                show_comparative_bands=True,
+                output_dir=subject_dir
+            )
+
     if args.analysis in ['tf', 'all']:
         print("\nRunning time-frequency analysis...")
         output_dir = None if args.plot else tf_dir
