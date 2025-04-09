@@ -9,8 +9,12 @@ neural manifold visualization.
 
 import os
 import argparse
-from utils.helpers import ensure_dir, get_region_lists, region_groups
-
+from utils.helpers import (
+    ensure_dir, 
+    get_region_lists, 
+    load_region_subject_mapping,
+    region_groups
+)
 from region_processing import analyze_region_specific_data
 from analysis import (
     perform_time_frequency_analysis,
@@ -43,7 +47,14 @@ def parse_arguments():
         type=int, 
         nargs='+',
         default=[2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 29, 30, 31, 32, 34, 35, 36, 37, 39, 41, 45], # all subjects
-        help='List of subject IDs to analyze'
+        help='Default list of subject IDs to analyze (used if no region-specific mapping is provided)'
+    )
+
+    parser.add_argument(
+        '--region-subject-mapping', 
+        type=str,
+        default=None,
+        help='Path to JSON file mapping regions to specific subject IDs'
     )
 
     parser.add_argument(
@@ -142,11 +153,14 @@ def main():
     ensure_dir(gesture_dir)
     ensure_dir(align_dir)
 
+    # Load region-subject mapping if provided
+    region_subject_mapping = load_region_subject_mapping(args.region_subject_mapping, args.subjects)
+    
     # Get region lists to analyze
     region_lists = get_region_lists(args)
     
-    # Define parameters
-    subject_id_list = args.subjects
+    # Define default parameters
+    default_subject_list = args.subjects
     sampling_frequency = 1000
     trigger_type = args.trigger
     frequency_bands = args.bands
@@ -170,8 +184,16 @@ def main():
     # Extract and analyze data for each region group
     for group_name, region_labels in region_lists.items():
         print(f"\n===== Processing Region Group: {group_name} =====")
+        
+        # Determine which subjects to use for this region
+        if group_name in region_subject_mapping:
+            subject_id_list = region_subject_mapping[group_name]
+            print(f"Using region-specific subjects for {group_name}: {subject_id_list}")
+        else:
+            subject_id_list = default_subject_list
+            print(f"Using default subjects for {group_name}: {subject_id_list}")
+        
         print(f"Extracting data for regions: {region_labels}")
-        print(f"Using subjects: {subject_id_list}")
         
         # Create group-specific output directories
         group_bandpower_dir = os.path.join(bandpower_dir, group_name)
@@ -188,7 +210,7 @@ def main():
         # Extract and analyze region-specific data
         region_epochs, region_channels_dict = analyze_region_specific_data(
             region_labels,
-            subject_id_list,
+            subject_id_list,  # Now using region-specific subject list
             sampling_frequency,
             mapping_events,
             event_dict_gest,
