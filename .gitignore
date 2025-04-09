@@ -326,3 +326,6 @@ region_processing/__pycache__/epochs_extractor.cpython-312.pyc
 region_processing/__pycache__/region_extractor.cpython-312.pyc
 utils/__pycache__/__init__.cpython-312.pyc
 utils/__pycache__/helpers.cpython-312.pyc
+analysis/__pycache__/high_dim_manifold.cpython-39.pyc
+analysis/__pycache__/manifold_correlation.cpython-39.pyc
+visualization/__pycache__/manifold_correlation_viz.cpython-39.pyc
