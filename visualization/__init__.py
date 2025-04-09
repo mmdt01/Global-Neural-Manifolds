@@ -236,3 +236,264 @@ def visualize_canonical_correlations(cca_results, bands=None, output_dir=None):
         plot_correlation_radar(cca_results, band, output_dir)
     
     print("\nVisualization complete!")
+
+def visualize_mode_correlations(cca_results, bands=None, output_dir=None):
+    """
+    Visualize canonical correlations by neural mode across subjects.
+    
+    Parameters:
+    -----------
+    cca_results : dict
+        Dictionary containing CCA results for each band and subject pair
+        (output from compare_subject_manifolds)
+    bands : list, optional
+        List of frequency bands to visualize. If None, uses all available bands.
+    output_dir : str, optional
+        Directory to save plots. If None, plots are displayed but not saved.
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import pandas as pd
+    import os
+    
+    # If bands not specified, use all available bands
+    if bands is None:
+        bands = list(cca_results.keys())
+    
+    # Create output directory if needed
+    if output_dir is not None:
+        os.makedirs(output_dir, exist_ok=True)
+    
+    # Set seaborn style
+    sns.set_style("whitegrid")
+    
+    # Colors for different bands
+    band_colors = {
+        'delta': '#1f77b4',  # blue
+        'theta': '#ff7f0e',  # orange
+        'alpha': '#2ca02c',  # green
+        'beta': '#d62728',   # red
+        'low_gamma': '#9467bd',  # purple
+        'high_gamma': '#8c564b',  # brown
+        'broad': '#e377c2'   # pink
+    }
+    
+    # Collect data for all visualizations
+    all_data = []
+    max_modes = 0
+    
+    for band_name in bands:
+        if band_name not in cca_results or not cca_results[band_name]:
+            print(f"No CCA results found for {band_name} band, skipping...")
+            continue
+        
+        print(f"\nProcessing {band_name} band correlations...")
+        
+        # Create a nested dictionary to store values by mode
+        mode_correlations = {}
+        
+        # Process each subject pair
+        for pair_key, result in cca_results[band_name].items():
+            # Get canonical correlations
+            correlations = result['r']
+            max_modes = max(max_modes, len(correlations))
+            
+            # For each mode, store the correlation
+            for i, r in enumerate(correlations):
+                mode_num = i + 1  # 1-based indexing for modes
+                
+                # Initialize list for this mode if it doesn't exist
+                if mode_num not in mode_correlations:
+                    mode_correlations[mode_num] = []
+                
+                # Add correlation to the list
+                mode_correlations[mode_num].append(r)
+                
+                # Add to all_data for violin plots
+                all_data.append({
+                    'Band': band_name.capitalize(),
+                    'Mode': f'Mode {mode_num}',
+                    'Mode_num': mode_num,
+                    'Correlation': r,
+                    'Subject Pair': pair_key
+                })
+        
+        # Calculate mean and std for each mode
+        modes = sorted(mode_correlations.keys())
+        mean_correlations = [np.mean(mode_correlations[m]) for m in modes]
+        std_correlations = [np.std(mode_correlations[m]) for m in modes]
+        
+        # Plot 1: Bar chart of mean correlations by mode for this band
+        plt.figure(figsize=(10, 6))
+        plt.bar(
+            modes, 
+            mean_correlations, 
+            yerr=std_correlations,
+            capsize=5,
+            color=band_colors.get(band_name, None),
+            alpha=0.7
+        )
+        
+        # Add individual data points
+        for mode in modes:
+            # Add jittered points to see distribution
+            x_jitter = np.random.normal(mode, 0.05, len(mode_correlations[mode]))
+            plt.scatter(
+                x_jitter, 
+                mode_correlations[mode], 
+                alpha=0.7,
+                edgecolor='black',
+                linewidth=0.5,
+                s=30
+            )
+        
+        plt.xlabel('Neural Mode', fontsize=12)
+        plt.ylabel('Canonical Correlation', fontsize=12)
+        plt.title(f'{band_name.capitalize()} Band: Mean Correlation by Neural Mode', fontsize=14)
+        plt.xticks(modes)
+        plt.ylim([0, 1])
+        plt.grid(True, axis='y')
+        
+        # Add text annotations for mean values
+        for i, (mode, mean_corr) in enumerate(zip(modes, mean_correlations)):
+            plt.text(
+                mode, 
+                mean_corr + std_correlations[i] + 0.03, 
+                f'{mean_corr:.3f}',
+                ha='center',
+                fontsize=9,
+                fontweight='bold'
+            )
+        
+        # Save or show the figure
+        if output_dir is not None:
+            plt.savefig(f"{output_dir}/mode_correlations_{band_name}.png", 
+                        dpi=300, bbox_inches='tight')
+            plt.close()
+        else:
+            plt.tight_layout()
+            plt.show()
+    
+    # Create dataframe for all collected data
+    if all_data:
+        df = pd.DataFrame(all_data)
+        
+        # Plot 2: Combined violin plot showing distribution of correlations by mode across bands
+        plt.figure(figsize=(12, 6))
+        ax = sns.violinplot(
+            data=df,
+            x='Mode_num',
+            y='Correlation',
+            hue='Band',
+            inner='quartile',
+            palette={band.capitalize(): band_colors.get(band.lower(), None) for band in df['Band'].unique()}
+        )
+        
+        # Customize x-axis labels
+        plt.xlabel('Neural Mode', fontsize=12)
+        plt.ylabel('Canonical Correlation', fontsize=12)
+        plt.title('Distribution of Canonical Correlations by Neural Mode', fontsize=14)
+        plt.xticks(range(len(df['Mode_num'].unique())), [f'Mode {i+1}' for i in range(len(df['Mode_num'].unique()))])
+        plt.grid(True, axis='y')
+        plt.ylim([0, 1])
+        
+        # Save or show the figure
+        if output_dir is not None:
+            plt.savefig(f"{output_dir}/mode_correlations_violin_all_bands.png", 
+                        dpi=300, bbox_inches='tight')
+            plt.close()
+        else:
+            plt.tight_layout()
+            plt.show()
+        
+        # Plot 3: Line plot comparing mode correlations across bands
+        plt.figure(figsize=(10, 6))
+        
+        # Group by band and mode, and calculate mean
+        band_mode_means = df.groupby(['Band', 'Mode_num'])['Correlation'].mean().reset_index()
+        
+        # Plot for each band
+        for band in df['Band'].unique():
+            band_data = band_mode_means[band_mode_means['Band'] == band]
+            plt.plot(
+                band_data['Mode_num'], 
+                band_data['Correlation'], 
+                marker='o',
+                linewidth=2,
+                label=band,
+                color=band_colors.get(band.lower(), None)
+            )
+        
+        plt.xlabel('Neural Mode', fontsize=12)
+        plt.ylabel('Mean Canonical Correlation', fontsize=12)
+        plt.title('Mean Correlation by Neural Mode Across Frequency Bands', fontsize=14)
+        plt.xticks(range(1, max_modes+1))
+        plt.grid(True)
+        plt.legend(title='Frequency Band')
+        plt.ylim([0, 1])
+        
+        # Save or show the figure
+        if output_dir is not None:
+            plt.savefig(f"{output_dir}/mode_correlations_comparison.png", 
+                        dpi=300, bbox_inches='tight')
+            plt.close()
+        else:
+            plt.tight_layout()
+            plt.show()
+        
+        # Plot 4: Heatmap showing correlation of each mode for each subject pair
+        # Create separate heatmaps for each band
+        for band_name in bands:
+            if band_name not in cca_results or not cca_results[band_name]:
+                continue
+                
+            # Filter data for this band
+            band_df = df[df['Band'] == band_name.capitalize()]
+            
+            # Get unique subject pairs
+            subject_pairs = band_df['Subject Pair'].unique()
+            
+            # Get max mode number
+            max_mode = band_df['Mode_num'].max()
+            
+            # Create matrix for heatmap
+            heatmap_data = np.zeros((len(subject_pairs), max_mode))
+            
+            # Fill matrix
+            for i, pair in enumerate(subject_pairs):
+                pair_data = band_df[band_df['Subject Pair'] == pair]
+                for _, row in pair_data.iterrows():
+                    mode = int(row['Mode_num'])
+                    heatmap_data[i, mode-1] = row['Correlation']
+            
+            # Create heatmap
+            plt.figure(figsize=(10, max(6, len(subject_pairs) * 0.4)))
+            
+            ax = sns.heatmap(
+                heatmap_data,
+                annot=True,
+                fmt=".2f",
+                cmap="YlGnBu",
+                yticklabels=subject_pairs,
+                xticklabels=[f"Mode {i+1}" for i in range(max_mode)],
+                vmin=0,
+                vmax=1,
+                cbar_kws={'label': 'Correlation'}
+            )
+            
+            plt.title(f'{band_name.capitalize()} Band: Neural Mode Correlations by Subject Pair', fontsize=14)
+            plt.xlabel('Neural Mode', fontsize=12)
+            plt.ylabel('Subject Pair', fontsize=12)
+            
+            # Rotate yticklabels for better readability
+            plt.yticks(rotation=0)
+            
+            # Save or show the figure
+            if output_dir is not None:
+                plt.savefig(f"{output_dir}/mode_correlation_heatmap_{band_name}.png", 
+                           dpi=300, bbox_inches='tight')
+                plt.close()
+            else:
+                plt.tight_layout()
+                plt.show()

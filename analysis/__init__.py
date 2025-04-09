@@ -15,6 +15,10 @@ from .band_power_viz import (
     visualize_multi_epoch_band_power,
     visualize_comparative_bands
 )
+from .high_dim_manifold import (
+    analyze_high_dim_neural_manifolds,
+    align_high_dim_manifolds
+)
 
 def perform_time_frequency_analysis(region_epochs, region_channels_dict, region_labels,
                                   tmin=None, tmax=None, output_dir=None):

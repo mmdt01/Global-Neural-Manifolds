@@ -21,12 +21,15 @@ from analysis import (
     analyze_neural_manifolds,
     analyze_gesture_manifolds,
     compare_subject_manifolds,
-    visualize_signal_transform
+    visualize_signal_transform,
+    analyze_high_dim_neural_manifolds,
+    align_high_dim_manifolds
 )
 from visualization import (
     plot_tf_summary,
     plot_manifold_comparison,
-    visualize_canonical_correlations
+    visualize_canonical_correlations,
+    visualize_mode_correlations
 )
 
 def parse_arguments():
@@ -100,8 +103,15 @@ def parse_arguments():
         '--analysis', 
         type=str,
         default='none',
-        choices=['none', 'visualize-band-power', 'tf', 'manifold', 'gesture', 'align-manifolds', 'all'],
+        choices=['none', 'visualize-band-power', 'tf', 'manifold', 'gesture', 'align-manifolds', 'high-dim-alignment', 'all'],
         help='Type of analysis to run'
+    )
+
+    parser.add_argument(
+        '--high-dim-components',
+        type=int,
+        default=10,
+        help='Number of components to use for high-dimensional manifold analysis'
     )
     
     parser.add_argument(
@@ -384,6 +394,51 @@ def main():
                 output_dir=output_dir
             )
 
+        if args.analysis in ['high-dim-alignment', 'all']:
+            print(f"\nRunning high-dimensional manifold alignment ({args.high_dim_components} components) for {group_name}...")
+            high_dim_dir = os.path.join(args.output_dir, 'high_dim_manifolds')
+            ensure_dir(high_dim_dir)
+            
+            # Create region-specific output directory
+            group_high_dim_dir = os.path.join(high_dim_dir, group_name)
+            ensure_dir(group_high_dim_dir)
+            
+            # Set output directory based on interactive plotting preference
+            output_dir = None if args.plot else group_high_dim_dir
+            
+            # Step 1: compute high-dimensional neural manifolds
+            print("... Step 1: computing high-dimensional neural manifolds ...")
+            manifold_results = analyze_high_dim_neural_manifolds(
+                region_epochs,
+                region_channels_dict,
+                region_labels,
+                frequency_bands,
+                n_components=args.high_dim_components,
+                downsample_factor=1,
+                output_dir=output_dir
+            )
+            
+            # Step 2: align manifolds between subjects
+            print("... Step 2: aligning high-dimensional manifolds across subjects using CCA ...")
+            cca_results = align_high_dim_manifolds(
+                manifold_results,
+                subject_id_list, 
+                frequency_bands,
+                output_dir=output_dir
+            )
+            
+            # Step 3: visualize the mode-specific correlations
+            print("... Step 3: visualizing the mode-specific correlations ...")
+            visualize_canonical_correlations(
+                cca_results, 
+                frequency_bands,
+                output_dir=output_dir
+            )
+            visualize_mode_correlations(
+                cca_results, 
+                frequency_bands,
+                output_dir=output_dir
+            )
 
     print("\nAnalysis completed successfully!")
 
