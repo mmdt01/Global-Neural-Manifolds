@@ -14,15 +14,24 @@ region_groups = {
     # postcentral regions
     "postcentral-rh": ["ctx-rh-postcentral", "wm-rh-postcentral"],
     "postcentral-lh": ["ctx-lh-postcentral", "wm-lh-postcentral"],
-    # supramarginal regions
-    "supramarginal-rh": ["ctx-rh-supramarginal", "wm-rh-supramarginal"],
-    "supramarginal-lh": ["ctx-lh-supramarginal", "wm-lh-supramarginal"],
     # superior parietal regions
     "superiorparietal-rh": ["ctx-rh-superiorparietal", "wm-rh-superiorparietal"],
     "superiorparietal-lh": ["ctx-lh-superiorparietal", "wm-lh-superiorparietal"],
+    # supramarginal regions
+    "supramarginal-rh": ["ctx-rh-supramarginal", "wm-rh-supramarginal"],
+    "supramarginal-lh": ["ctx-lh-supramarginal", "wm-lh-supramarginal"],
+    # caudal middle frontal regions
+    "caudalmiddlefrontal-rh": ["ctx-rh-caudalmiddlefrontal", "wm-rh-caudalmiddlefrontal"],
+    "caudalmiddlefrontal-lh": ["ctx-lh-caudalmiddlefrontal", "wm-lh-caudalmiddlefrontal"],
+    # rostral middle frontal regions
+    "rostralmiddlefrontal-rh": ["ctx-rh-rostralmiddlefrontal", "wm-rh-rostralmiddlefrontal"],
+    "rostralmiddlefrontal-lh": ["ctx-lh-rostralmiddlefrontal", "wm-lh-rostralmiddlefrontal"],
     # superior frontal regions
     "superiorfrontal-rh": ["ctx-rh-superiorfrontal", "wm-rh-superiorfrontal"],
     "superiorfrontal-lh": ["ctx-lh-superiorfrontal", "wm-lh-superiorfrontal"],
+    # pars opercularis regions
+    "parsopercularis-rh": ["ctx-rh-parsopercularis", "wm-rh-parsopercularis"],
+    "parsopercularis-lh": ["ctx-lh-parsopercularis", "wm-lh-parsopercularis"],
     # insula regions
     "insula-rh": ["ctx-rh-insula", "wm-rh-insula"],
     "insula-lh": ["ctx-lh-insula", "wm-lh-insula"],

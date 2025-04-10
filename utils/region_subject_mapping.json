@@ -1,7 +1,16 @@
 {
     "precentral-rh": [4, 7, 9, 34, 41],
+    "precentral-lh": [2, 13, 29, 35, 45],
     "postcentral-rh": [4, 7, 8, 34, 41],
-    "supramarginal-lh": [3, 10, 13, 17, 25],
+    "superiorparietal-rh": [5, 12, 18, 34, 41],
     "superiorparietal-lh": [3, 10, 13, 18, 25],
+    "supramarginal-rh": [4, 12, 16, 20, 24],
+    "supramarginal-lh": [3, 10, 13, 17, 25],
+    "caudalmiddlefrontal-rh": [7, 9, 19, 32, 41],
+    "rostralmiddlefrontal-rh": [5, 8, 9, 14, 24],
+    "rostralmiddlefrontal-lh": [2, 16, 19, 23, 45],
+    "superiorfrontal-rh": [9, 14, 19, 32, 41],
+    "superiorfrontal-lh": [13, 19, 29, 37, 45],
+    "insula-rh": [8, 23, 24, 26, 39],
     "insula-lh": [16, 17, 23, 26, 35]
   }
