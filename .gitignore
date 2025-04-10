@@ -329,3 +329,5 @@ utils/__pycache__/helpers.cpython-312.pyc
 analysis/__pycache__/high_dim_manifold.cpython-39.pyc
 analysis/__pycache__/manifold_correlation.cpython-39.pyc
 visualization/__pycache__/manifold_correlation_viz.cpython-39.pyc
+analysis/__pycache__/cross_region_manifold.cpython-39.pyc
+visualization/__pycache__/cross_region_viz.cpython-39.pyc
