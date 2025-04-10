@@ -49,15 +49,15 @@ def parse_arguments():
         '--subjects', 
         type=int, 
         nargs='+',
-        default=[2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 29, 30, 31, 32, 34, 35, 36, 37, 39, 41, 45], # all subjects
-        help='Default list of subject IDs to analyze (used if no region-specific mapping is provided)'
+        default=None,
+        help='Subject IDs to use (overrides region-specific mapping when provided)'
     )
 
     parser.add_argument(
         '--region-subject-mapping', 
         type=str,
-        default=None,
-        help='Path to JSON file mapping regions to specific subject IDs'
+        default='utils/region_subject_mapping.json',
+        help='Path to JSON file mapping regions to specific subject IDs (default: utils/region_subject_mapping.json)'
     )
 
     parser.add_argument(
@@ -110,7 +110,7 @@ def parse_arguments():
     parser.add_argument(
         '--high-dim-components',
         type=int,
-        default=10,
+        default=5,
         help='Number of components to use for high-dimensional manifold analysis'
     )
     
@@ -163,14 +163,19 @@ def main():
     ensure_dir(gesture_dir)
     ensure_dir(align_dir)
 
+    # Default subject list - only used if JSON mapping fails AND no subjects are specified
+    default_subject_list = [2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 
+                           24, 25, 26, 29, 30, 31, 32, 34, 35, 36, 37, 39, 41, 45]
+
     # Load region-subject mapping if provided
-    region_subject_mapping = load_region_subject_mapping(args.region_subject_mapping, args.subjects)
+    region_subject_mapping = load_region_subject_mapping(args.region_subject_mapping, default_subject_list)
     
     # Get region lists to analyze
     region_lists = get_region_lists(args)
     
     # Define default parameters
-    default_subject_list = args.subjects
+    use_default_subjects = args.subjects is not None  # Flag to indicate if default subjects should be used
+    global_subject_list = args.subjects if args.subjects is not None else default_subject_list
     sampling_frequency = 1000
     trigger_type = args.trigger
     frequency_bands = args.bands
@@ -196,12 +201,15 @@ def main():
         print(f"\n===== Processing Region Group: {group_name} =====")
         
         # Determine which subjects to use for this region
-        if group_name in region_subject_mapping:
+        if use_default_subjects:
+            subject_id_list = global_subject_list
+            print(f"Using command-line specified subjects for {group_name}: {subject_id_list}")
+        elif group_name in region_subject_mapping:
             subject_id_list = region_subject_mapping[group_name]
-            print(f"Using region-specific subjects for {group_name}: {subject_id_list}")
+            print(f"Using region-specific subjects from mapping file for {group_name}: {subject_id_list}")
         else:
-            subject_id_list = default_subject_list
-            print(f"Using default subjects for {group_name}: {subject_id_list}")
+            subject_id_list = global_subject_list
+            print(f"No mapping found for {group_name}, using default subjects: {subject_id_list}")
         
         print(f"Extracting data for regions: {region_labels}")
         
@@ -429,11 +437,6 @@ def main():
             
             # Step 3: visualize the mode-specific correlations
             print("... Step 3: visualizing the mode-specific correlations ...")
-            visualize_canonical_correlations(
-                cca_results, 
-                frequency_bands,
-                output_dir=output_dir
-            )
             visualize_mode_correlations(
                 cca_results, 
                 frequency_bands,
