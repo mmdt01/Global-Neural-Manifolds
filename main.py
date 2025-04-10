@@ -23,13 +23,18 @@ from analysis import (
     compare_subject_manifolds,
     visualize_signal_transform,
     analyze_high_dim_neural_manifolds,
-    align_high_dim_manifolds
+    align_high_dim_manifolds,
+    align_cross_region_manifolds,
+    compute_region_similarity_matrix,
+    analyze_mode_specific_correlations,
+    compare_within_vs_cross_region_correlations
 )
 from visualization import (
     plot_tf_summary,
     plot_manifold_comparison,
     visualize_canonical_correlations,
-    visualize_mode_correlations
+    visualize_mode_correlations,
+    visualize_cross_region_correlations
 )
 
 def parse_arguments():
@@ -103,7 +108,8 @@ def parse_arguments():
         '--analysis', 
         type=str,
         default='none',
-        choices=['none', 'visualize-band-power', 'tf', 'manifold', 'gesture', 'align-manifolds', 'high-dim-alignment', 'all'],
+        choices=['none', 'visualize-band-power', 'tf', 'manifold', 'gesture', 
+                 'align-manifolds', 'high-dim-alignment', 'cross-region-alignment', 'all'],
         help='Type of analysis to run'
     )
 
@@ -112,6 +118,13 @@ def parse_arguments():
         type=int,
         default=5,
         help='Number of components to use for high-dimensional manifold analysis'
+    )
+
+    parser.add_argument(
+        '--cross-region-components',
+        type=int,
+        default=5,
+        help='Number of components to use for cross-region manifold analysis'
     )
     
     parser.add_argument(
@@ -442,6 +455,67 @@ def main():
                 frequency_bands,
                 output_dir=output_dir
             )
+
+        if args.analysis in ['cross-region-alignment', 'all']:
+            print(f"\nRunning cross-region manifold alignment analysis...")
+            
+            # Check if we have at least 2 regions for comparison
+            if len(all_region_epochs) < 2:
+                print("ERROR: Cross-region alignment requires at least 2 regions. Please provide multiple regions using --regions.")
+            else:
+                # Create output directory
+                cross_region_dir = os.path.join(args.output_dir, 'cross_region_manifolds')
+                ensure_dir(cross_region_dir)
+                
+                # Set output directory based on interactive plotting preference
+                output_dir = None if args.plot else cross_region_dir
+                
+                # Step 1: Align manifolds across regions and subjects
+                print("... Step 1: aligning neural manifolds across regions and subjects ...")
+                cross_region_results, region_manifold_results = align_cross_region_manifolds(
+                    all_region_epochs,
+                    all_region_channels_dict,
+                    region_lists,
+                    bands=frequency_bands,
+                    n_components=args.cross_region_components,
+                    downsample_factor=1,
+                    output_dir=output_dir
+                )
+                
+                # Step 2: Compute region similarity matrices
+                print("... Step 2: computing region similarity matrices ...")
+                similarity_matrices = compute_region_similarity_matrix(
+                    cross_region_results,
+                    bands=frequency_bands,
+                    method='mean'
+                )
+                
+                # Step 3: Analyze mode-specific correlations
+                print("... Step 3: analyzing mode-specific correlations ...")
+                mode_correlations = analyze_mode_specific_correlations(
+                    cross_region_results,
+                    bands=frequency_bands,
+                    n_modes=args.cross_region_components
+                )
+                
+                # Step 4: Compare within-region vs cross-region correlations
+                print("... Step 4: comparing within-region vs cross-region correlations ...")
+                comparison_results = compare_within_vs_cross_region_correlations(
+                    mode_correlations,
+                    bands=frequency_bands,
+                    n_modes=args.cross_region_components
+                )
+                
+                # Step 5: Visualize the results
+                print("... Step 5: visualizing cross-region correlation results ...")
+                visualize_cross_region_correlations(
+                    cross_region_results,
+                    similarity_matrices,
+                    mode_correlations,
+                    comparison_results,
+                    bands=frequency_bands,
+                    output_dir=output_dir
+                )
 
     print("\nAnalysis completed successfully!")
 

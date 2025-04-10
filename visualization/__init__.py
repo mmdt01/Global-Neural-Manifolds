@@ -10,6 +10,13 @@ from .manifold_stats import (
     plot_correlation_heatmap,
     plot_correlation_radar
 )
+from .cross_region_viz import (
+    visualize_region_similarity_matrices,
+    visualize_mode_correlations_by_region,
+    visualize_overall_mode_correlations,
+    visualize_within_vs_cross_comparison,
+    visualize_cross_region_correlations
+)
 
 def plot_tf_summary(power_dict, region_channels_dict, region_labels, baseline, output_dir=None):
     """

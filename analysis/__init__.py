@@ -19,6 +19,12 @@ from .high_dim_manifold import (
     analyze_high_dim_neural_manifolds,
     align_high_dim_manifolds
 )
+from .cross_region_manifold import (
+    align_cross_region_manifolds,
+    compute_region_similarity_matrix,
+    analyze_mode_specific_correlations,
+    compare_within_vs_cross_region_correlations
+)
 
 def perform_time_frequency_analysis(region_epochs, region_channels_dict, region_labels,
                                   tmin=None, tmax=None, output_dir=None):
