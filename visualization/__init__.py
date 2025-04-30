@@ -17,6 +17,12 @@ from .cross_region_viz import (
     visualize_within_vs_cross_comparison,
     visualize_cross_region_correlations
 )
+from .tsne_gesture_visualization import (
+    prepare_trial_data,
+    apply_tsne,
+    plot_tsne_2d,
+    plot_tsne_3d
+)
 
 def plot_tf_summary(power_dict, region_channels_dict, region_labels, baseline, output_dir=None):
     """
@@ -504,3 +510,106 @@ def visualize_mode_correlations(cca_results, bands=None, output_dir=None):
             else:
                 plt.tight_layout()
                 plt.show()
+
+def visualize_gesture_tsne(epochs_dict, subject_id=None, region_label=None, 
+                          band_name='delta', output_dir=None, perplexity=None,
+                          show_2d=True, show_3d=True, random_state=42):
+    """
+    High-level function to create t-SNE visualizations of gesture trials.
+    
+    Parameters:
+    -----------
+    epochs_dict : dict or mne.Epochs
+        Either a dictionary mapping band names to mne.Epochs objects,
+        or a single mne.Epochs object
+    subject_id : str or int, optional
+        Subject ID for the plot title
+    region_label : str, optional
+        Brain region label for the plot title
+    band_name : str, optional
+        Name of the frequency band to use if epochs_dict is a dictionary
+    output_dir : str, optional
+        Directory to save plots. If None, plots are displayed but not saved.
+    perplexity : float, optional
+        Perplexity parameter for t-SNE. If None, uses sqrt(n_samples)
+    show_2d : bool, optional
+        Whether to create 2D visualization
+    show_3d : bool, optional
+        Whether to create 3D visualization
+    random_state : int, optional
+        Random seed for reproducibility
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing the figures and t-SNE results
+    """
+    print(f"Preparing data for t-SNE visualization...")
+    
+    # Prepare trial data
+    trial_data, all_trials, all_labels = prepare_trial_data(
+        epochs_dict, band_name=band_name
+    )
+    
+    # Check if we have enough data
+    if len(all_trials) < 10:
+        print(f"WARNING: Only {len(all_trials)} trials available, t-SNE may be unreliable")
+        if len(all_trials) < 4:
+            print("Too few trials for t-SNE visualization, skipping")
+            return None
+    
+    # Create output directory if needed
+    if output_dir is not None:
+        subject_dir = output_dir
+        if subject_id is not None:
+            subject_dir = os.path.join(output_dir, f"subject_{subject_id}")
+        os.makedirs(subject_dir, exist_ok=True)
+    else:
+        subject_dir = None
+    
+    # Results dictionary
+    results = {
+        'trial_data': trial_data,
+        'all_trials': all_trials,
+        'all_labels': all_labels,
+        'figures': {}
+    }
+    
+    # Apply t-SNE for 2D visualization if requested
+    if show_2d:
+        print("Applying t-SNE for 2D visualization...")
+        embedded_2d = apply_tsne(all_trials, perplexity=perplexity, 
+                               n_components=2, random_state=random_state)
+        
+        results['embedded_2d'] = embedded_2d
+        
+        print("Creating 2D t-SNE visualization...")
+        fig_2d = plot_tsne_2d(
+            embedded_2d, all_labels, 
+            subject_id=subject_id, 
+            region_label=region_label,
+            output_dir=subject_dir
+        )
+        
+        results['figures']['2d'] = fig_2d
+    
+    # Apply t-SNE for 3D visualization if requested
+    if show_3d:
+        print("Applying t-SNE for 3D visualization...")
+        embedded_3d = apply_tsne(all_trials, perplexity=perplexity, 
+                               n_components=3, random_state=random_state)
+        
+        results['embedded_3d'] = embedded_3d
+        
+        print("Creating 3D t-SNE visualization...")
+        fig_3d = plot_tsne_3d(
+            embedded_3d, all_labels, 
+            subject_id=subject_id, 
+            region_label=region_label,
+            output_dir=subject_dir
+        )
+        
+        results['figures']['3d'] = fig_3d
+    
+    return results
+
