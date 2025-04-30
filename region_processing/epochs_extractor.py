@@ -2,18 +2,20 @@
 Functions for extracting region-specific epochs.
 """
 
-import numpy as np
-import matplotlib.pyplot as plt
-from .region_extractor import get_brain_regions, create_region_mapping, brain_region_select
+from .region_extractor import (
+    get_brain_regions, 
+    create_region_mapping, 
+    brain_region_select
+)
 
-def get_channels_for_regions(epochs, good_channels, labels, chn_data, region_labels):
+def get_channels_for_regions(epochs_dict, good_channels, labels, chn_data, region_labels):
     """
     Get channel names for specific brain regions.
     
     Parameters:
     -----------
-    epochs : mne.Epochs
-        Epochs object containing the data
+    epochs_dict : dict
+        Dictionary mapping frequency band names to mne.Epochs objects
     good_channels : array
         Array of good channel indices
     labels : array
@@ -28,6 +30,10 @@ def get_channels_for_regions(epochs, good_channels, labels, chn_data, region_lab
     unique_region_channels : list
         List of channel names for the specified regions
     """
+    # Use the first epochs object to get channel info (all should have the same channels)
+    first_band = next(iter(epochs_dict))
+    epochs = epochs_dict[first_band]
+    
     # Get brain regions for this subject
     brain_regions = get_brain_regions(good_channels, labels, chn_data)
     
@@ -62,7 +68,7 @@ def get_channels_for_regions(epochs, good_channels, labels, chn_data, region_lab
     return unique_region_channels
 
 def extract_region_specific_epochs(region_labels, subject_id_list, sampling_frequency, mapping_events, 
-                                event_dict_gest, trigger_type, tmin, tmax):
+                                event_dict_gest, trigger_type, tmin, tmax, bands_to_process=None):
     """
     Extract epochs data for specific brain regions across multiple subjects.
     
@@ -84,11 +90,13 @@ def extract_region_specific_epochs(region_labels, subject_id_list, sampling_freq
         Start time for epochs in seconds, relative to events
     tmax : float
         End time for epochs in seconds, relative to events
+    bands_to_process : list or None
+        List of frequency band names to process. If None, all bands will be processed.
     
     Returns:
     --------
     region_epochs : dict
-        Dictionary mapping subject IDs to region-specific epochs objects
+        Nested dictionary mapping subject IDs to frequency bands to region-specific epochs objects
     region_channels_dict : dict
         Dictionary mapping subject IDs to lists of channel names
     """
@@ -104,8 +112,8 @@ def extract_region_specific_epochs(region_labels, subject_id_list, sampling_freq
         print(f"\nProcessing subject {subject_id}...")
         
         try:
-            # Load subject data
-            epochs, good_channels, names, labels, chn_data = load_subject_data(
+            # Load subject data - now returns a dictionary of epochs by frequency band
+            epochs_dict, good_channels, names, labels, chn_data = load_subject_data(
                 subject_id, 
                 sampling_frequency, 
                 mapping_events, 
@@ -114,12 +122,13 @@ def extract_region_specific_epochs(region_labels, subject_id_list, sampling_freq
                 tmin, 
                 tmax, 
                 baseline=None, 
-                plot=False
+                plot=False,
+                bands_to_process=bands_to_process
             )
             
-            # Get channels for the specified regions
+            # Get channels for the specified regions using the first band's epochs
             region_channels = get_channels_for_regions(
-                epochs, 
+                epochs_dict, 
                 good_channels, 
                 labels, 
                 chn_data, 
@@ -134,8 +143,14 @@ def extract_region_specific_epochs(region_labels, subject_id_list, sampling_freq
             print(f"Found {len(region_channels)} channels for the specified regions in subject {subject_id}:")
             print(region_channels)
             
-            # Create a new epochs object with only the channels from the specified regions
-            region_epochs[subject_id] = epochs.copy().pick_channels(region_channels)
+            # Create a nested dictionary for this subject
+            region_epochs[subject_id] = {}
+            
+            # Process each frequency band
+            for band_name, epochs in epochs_dict.items():
+                # Create a new epochs object with only the channels from the specified regions
+                region_epochs[subject_id][band_name] = epochs.copy().pick(region_channels)
+            
             region_channels_dict[subject_id] = region_channels
             
             print(f"Successfully extracted region-specific epochs for subject {subject_id}")
@@ -149,33 +164,92 @@ def extract_region_specific_epochs(region_labels, subject_id_list, sampling_freq
     else:
         print(f"\nSuccessfully extracted region-specific epochs for {len(region_epochs)} subjects:")
         for subject_id in region_epochs:
-            print(f"  Subject {subject_id}: {len(region_channels_dict[subject_id])} channels")
+            print(f"  Subject {subject_id}: {len(region_channels_dict[subject_id])} channels, {len(region_epochs[subject_id])} frequency bands")
     
     return region_epochs, region_channels_dict
 
-def plot_region_specific_epochs(region_epochs, region_channels_dict, event_id, title=None):
+def plot_region_specific_epochs(region_epochs, region_channels_dict, event_id, title=None, band_to_plot=None):
     """
     Plot the region-specific epochs data for all subjects.
     
     Parameters:
     -----------
     region_epochs : dict
-        Dictionary mapping subject IDs to region-specific epochs objects
+        Nested dictionary mapping subject IDs to frequency bands to region-specific epochs objects
     region_channels_dict : dict
         Dictionary mapping subject IDs to lists of channel names
     event_id : dict
         Dictionary mapping event labels to trigger values
     title : str, optional
         Optional title for the plots
+    band_to_plot : str, optional
+        Specific frequency band to plot. If None, plots the first available band.
     """
-    for subject_id, epochs in region_epochs.items():
+    for subject_id, band_epochs in region_epochs.items():
         num_channels = len(region_channels_dict[subject_id])
         
+        # Determine which band to plot
+        available_bands = list(band_epochs.keys())
+        if not available_bands:
+            print(f"No frequency bands available for subject {subject_id}")
+            continue
+            
+        if band_to_plot is not None and band_to_plot in available_bands:
+            band_name = band_to_plot
+        else:
+            band_name = available_bands[0]
+            if band_to_plot is not None:
+                print(f"Requested band '{band_to_plot}' not available for subject {subject_id}. Using '{band_name}' instead.")
+        
+        epochs = band_epochs[band_name]
+        
         # Create a title for the plot
-        plot_title = f"Subject {subject_id} - Regional Epochs" if title is None else f"{title} - Subject {subject_id}"
+        plot_title = f"Subject {subject_id} - {band_name} band" if title is None else f"{title} - Subject {subject_id} - {band_name} band"
         
         # Plot all channels if there are few, otherwise plot 8 at a time
         n_channels = min(8, num_channels)
+        
+        # Plot the epochs
+        epochs.plot(
+            n_channels=n_channels,
+            scalings={"seeg": 5e2},
+            title=plot_title,
+            event_id=event_id,
+            event_color=dict(elbow="red", scissor="blue", rock="black", rotation="green", thumb="yellow"),
+            show=True,
+            block=True
+        )
+
+def plot_all_frequency_bands(region_epochs, region_channels_dict, event_id, subject_id, title=None):
+    """
+    Plot all frequency bands for a specific subject.
+    
+    Parameters:
+    -----------
+    region_epochs : dict
+        Nested dictionary mapping subject IDs to frequency bands to region-specific epochs objects
+    region_channels_dict : dict
+        Dictionary mapping subject IDs to lists of channel names
+    event_id : dict
+        Dictionary mapping event labels to trigger values
+    subject_id : int
+        ID of the subject to plot
+    title : str, optional
+        Optional title for the plots
+    """
+    if subject_id not in region_epochs:
+        print(f"Subject {subject_id} not found in region_epochs")
+        return
+        
+    band_epochs = region_epochs[subject_id]
+    num_channels = len(region_channels_dict[subject_id])
+    
+    # Plot all channels if there are few, otherwise plot 8 at a time
+    n_channels = min(8, num_channels)
+    
+    for band_name, epochs in band_epochs.items():
+        # Create a title for the plot
+        plot_title = f"Subject {subject_id} - {band_name} band" if title is None else f"{title} - Subject {subject_id} - {band_name} band"
         
         # Plot the epochs
         epochs.plot(
