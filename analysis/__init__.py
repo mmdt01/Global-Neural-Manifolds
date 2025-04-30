@@ -25,6 +25,11 @@ from .cross_region_manifold import (
     analyze_mode_specific_correlations,
     compare_within_vs_cross_region_correlations
 )
+from .mean_activity import (
+    compute_gesture_mean_activity,
+    compute_mahalanobis_distance_matrix,
+    visualize_distance_matrix
+)
 
 def perform_time_frequency_analysis(region_epochs, region_channels_dict, region_labels,
                                   tmin=None, tmax=None, output_dir=None):
@@ -395,3 +400,80 @@ def visualize_signal_transform(epochs, subject_id, region_label,
     print("\nVisualization complete!")
     
     return figures
+
+def analyze_mean_delta_activity(region_epochs, region_channels_dict, region_labels, 
+                              event_dict=None, output_dir=None, band_name='delta'):
+    """
+    Analyze the mean delta band activity and compute Mahalanobis distances between gestures.
+    
+    Parameters:
+    -----------
+    region_epochs : dict
+        Nested dictionary mapping subject IDs to frequency bands to region-specific epochs objects
+    region_channels_dict : dict
+        Dictionary mapping subject IDs to lists of channel names
+    region_labels : list
+        List of brain region names included in the analysis
+    event_dict : dict, optional
+        Dictionary mapping gesture names to event IDs
+    output_dir : str, optional
+        Directory to save plots. If None, plots are displayed but not saved.
+    band_name : str, optional
+        Name of the frequency band to analyze. Default is 'delta'.
+    
+    Returns:
+    --------
+    results : dict
+        Dictionary containing distance matrices and other results for each subject
+    """
+    # Initialize results dictionary
+    results = {}
+    
+    # Process each subject
+    for subject_id, band_epochs in region_epochs.items():
+        # Skip if no epochs for this subject or if the specified band is not available
+        if len(band_epochs) == 0 or band_name not in band_epochs:
+            print(f"No epochs or no {band_name} band for Subject {subject_id}, skipping...")
+            continue
+        
+        # Get the epochs for the specified band
+        epochs = band_epochs[band_name]
+        
+        print(f"\nAnalyzing {band_name} band activity for Subject {subject_id}...")
+        
+        # Create subject-specific output directory if needed
+        subject_output_dir = None
+        if output_dir is not None:
+            subject_output_dir = os.path.join(output_dir, f"subject_{subject_id}")
+            os.makedirs(subject_output_dir, exist_ok=True)
+        
+        # 1. Compute gesture centroids and trial data
+        if event_dict is None:
+            gestures = list(epochs.event_id.keys())
+        else:
+            gestures = list(event_dict.keys())
+        
+        gesture_centroids, trial_data = compute_gesture_mean_activity(epochs, gestures)
+        
+        # 2. Compute Mahalanobis distance matrix
+        distance_matrix, gesture_labels = compute_mahalanobis_distance_matrix(gesture_centroids, trial_data)
+        
+        # 3. Visualize distance matrix
+        fig = visualize_distance_matrix(
+            distance_matrix, 
+            gesture_labels, 
+            subject_id=subject_id, 
+            region_label=', '.join(region_labels), 
+            output_dir=subject_output_dir
+        )
+        
+        # Store results for this subject
+        results[subject_id] = {
+            'distance_matrix': distance_matrix,
+            'gesture_labels': gesture_labels,
+            'gesture_centroids': gesture_centroids,
+            'trial_data': trial_data
+        }
+    
+    return results
+
