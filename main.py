@@ -2,41 +2,18 @@
 """
 Main script for neural data analysis.
 
-This script performs region-specific neural data extraction and analysis
-across multiple subjects, with options for time-frequency analysis and
-neural manifold visualization.
+This script performs highly modular brain-wide and region-specific neural data analysis 
+from intracranial recordings across multiple subjects executing different hand gestures.
 """
 
 import os
 import argparse
-from utils.helpers import (
-    ensure_dir, 
-    get_region_lists, 
-    load_region_subject_mapping,
-    region_groups
-)
+from utils.helpers import (region_groups, ensure_dir, get_region_lists, load_region_subject_mapping, combine_regions)
+from data_loading import load_region_data, save_region_data 
 from region_processing import analyze_region_specific_data
-from analysis import (
-    perform_time_frequency_analysis,
-    analyze_neural_manifolds,
-    analyze_gesture_manifolds,
-    compare_subject_manifolds,
-    visualize_signal_transform,
-    analyze_high_dim_neural_manifolds,
-    align_high_dim_manifolds,
-    align_cross_region_manifolds,
-    compute_region_similarity_matrix,
-    analyze_mode_specific_correlations,
-    compare_within_vs_cross_region_correlations
-)
-from visualization import (
-    plot_tf_summary,
-    plot_manifold_comparison,
-    visualize_canonical_correlations,
-    visualize_mode_correlations,
-    visualize_cross_region_correlations
-)
+from utils.run_analysis import run_region_analyses
 
+# parse_arguments function to handle command line arguments
 def parse_arguments():
     """
     Parse command line arguments.
@@ -93,14 +70,14 @@ def parse_arguments():
     parser.add_argument(
         '--tmin', 
         type=float,
-        default=0.2,
+        default=0.4,
         help='Start time for epochs in seconds'
     )
     
     parser.add_argument(
         '--tmax', 
         type=float,
-        default=0.6,
+        default=0.7,
         help='End time for epochs in seconds'
     )
     
@@ -108,7 +85,7 @@ def parse_arguments():
         '--analysis', 
         type=str,
         default='none',
-        choices=['none', 'visualize-band-power', 'tf', 'manifold', 'gesture', 
+        choices=['none', 'mean-activity', 'visualize-band-power', 'tf', 'manifold', 'gesture-manifolds', 
                  'align-manifolds', 'high-dim-alignment', 'cross-region-alignment', 'all'],
         help='Type of analysis to run'
     )
@@ -153,15 +130,51 @@ def parse_arguments():
         default=4,
         help='Number of epochs to visualize in band-power plots'
     )
+
+    parser.add_argument(
+        '--cache',
+        action='store_true',
+        help='Enable caching of processed data'
+    )
+
+    parser.add_argument(
+        '--force-recompute',
+        action='store_true',
+        help='Force recomputation even if cached data exists'
+    )
+
+    parser.add_argument(
+        '--region-grouping',
+        action='store_true',
+        help='Analyze all region groups together (brain-wide analysis)'
+    )
+
+    parser.add_argument(
+        '--tsne',
+        action='store_true',
+        help='Create t-SNE visualizations of gesture trials'
+    )
+    
+    parser.add_argument(
+        '--tsne-perplexity',
+        type=float,
+        default=None,
+        help='Perplexity parameter for t-SNE (default: auto-calculated as sqrt(n_samples))'
+    )
     
     return parser.parse_args()
 
+# main function to run the analysis
 def main():
     """
     Main function for neural data analysis.
     """
     # Parse command line arguments
     args = parse_arguments()
+
+    # Create cache directory
+    cache_dir = os.path.join(args.output_dir, 'cache')
+    ensure_dir(cache_dir)
     
     # Create output directories
     ensure_dir(args.output_dir)
@@ -209,7 +222,7 @@ def main():
     all_region_epochs = {}
     all_region_channels_dict = {}
     
-    # Extract and analyze data for each region group
+    # Extract and analyze data for each region group individually
     for group_name, region_labels in region_lists.items():
         print(f"\n===== Processing Region Group: {group_name} =====")
         
@@ -239,17 +252,67 @@ def main():
         ensure_dir(group_align_dir)
         
         # Extract and analyze region-specific data
-        region_epochs, region_channels_dict = analyze_region_specific_data(
-            region_labels,
-            subject_id_list,  # Now using region-specific subject list
-            sampling_frequency,
-            mapping_events,
-            event_dict_gest,
-            trigger_type,
-            tmin,
-            tmax,
-            plot=args.plot
-        )
+        use_cache = args.cache and not args.force_recompute
+        cached_data = None
+
+        if use_cache:
+            # Check if data is already cached
+            cached_data = load_region_data(
+                region_labels,
+                subject_id_list, 
+                sampling_frequency,
+                trigger_type,
+                tmin,
+                tmax,
+                bands_to_process=frequency_bands,
+                base_dir=cache_dir
+            )
+
+        if cached_data is not None:
+            # Use cached data
+            region_epochs, region_channels_dict = cached_data
+            print(f"Using cached data for region group: {group_name}")
+        else:
+            # Extract data if not cached or forced recomputation
+            if args.force_recompute:
+                print(f"Forced recomputation requested. Extracting region-specific data...")
+            elif not args.cache:
+                print(f"Caching disabled. Extracting region-specific data...")
+            else:
+                print(f"No cached data found. Extracting region-specific data...")
+                
+            region_epochs, region_channels_dict = analyze_region_specific_data(
+                region_labels,
+                subject_id_list,  # Now using region-specific subject list
+                sampling_frequency,
+                mapping_events,
+                event_dict_gest,
+                trigger_type,
+                tmin,
+                tmax,
+                bands_to_process=frequency_bands,
+                plot=args.plot,
+                band_to_plot='delta'
+            )
+            
+            # Save the extracted data to cache if caching is enabled
+            if args.cache:
+                save_region_data(
+                    region_epochs,
+                    region_channels_dict,
+                    region_labels,
+                    subject_id_list,
+                    sampling_frequency,
+                    trigger_type,
+                    tmin,
+                    tmax,
+                    bands_to_process=frequency_bands,
+                    base_dir=cache_dir
+                )
+
+        # Plot all frequency bands for a specific subject - DELETE THIS LATER
+        from region_processing.epochs_extractor import plot_all_frequency_bands
+        plot_all_frequency_bands(region_epochs, region_channels_dict, event_dict_gest, subject_id=41)
         
         # Store the results for this region group
         all_region_epochs[group_name] = region_epochs
@@ -260,262 +323,112 @@ def main():
         print(f"Total subjects with data: {len(region_epochs)}")
 
         for subject_id in region_epochs:
+            # Get the first available frequency band
+            first_band = next(iter(region_epochs[subject_id]))
             print(f"\nSubject {subject_id}:")
             print(f"  Number of channels: {len(region_channels_dict[subject_id])}")
-            print(f"  Number of epochs: {len(region_epochs[subject_id])}")
-            print(f"  Epoch duration: {region_epochs[subject_id].times[0]:.2f}s to {region_epochs[subject_id].times[-1]:.2f}s")
-            print(f"  Number of time points: {len(region_epochs[subject_id].times)}")
+            print(f"  Number of epochs: {len(region_epochs[subject_id][first_band])}")
+            print(f"  Epoch duration: {region_epochs[subject_id][first_band].times[0]:.2f}s to {region_epochs[subject_id][first_band].times[-1]:.2f}s")
+            print(f"  Number of time points: {len(region_epochs[subject_id][first_band].times)}")
             
             # Print event counts
             for event_name, event_id in event_dict_gest.items():
-                event_count = len(region_epochs[subject_id][event_name])
+                event_count = len(region_epochs[subject_id][first_band][event_name])
                 print(f"  {event_name} events: {event_count}")
 
-    
-        ###################################### analysis ######################################
-
-        # Run selected analyses based on command line arguments
-        if args.analysis in ['none']:
-            print(f"\nNo analysis method selected for {group_name}...")
-
-        if args.analysis in ['visualize-band-power', 'all']:
-            print(f"\nVisualizing signal transformation for {group_name}...")
-            # Generate visualizations for each subject
-            for subject_id, epochs in region_epochs.items():
-                # Skip if no epochs for this subject
-                if len(epochs) == 0:
-                    print(f"No epochs for Subject {subject_id}, skipping...")
-                    continue
-
-                # Create a subject-specific output directory
-                subject_dir = os.path.join(bandpower_dir, f"subject_{subject_id}")
-                ensure_dir(subject_dir)
-                
-                # Region label for titles
-                region_label = group_name
-                
-                # Run all visualizations with the high-level function
-                figures = visualize_signal_transform(
-                    epochs,
-                    subject_id,
-                    region_label,
-                    bands=frequency_bands,
-                    n_channels=args.n_channels,
-                    n_epochs=args.n_epochs,
-                    show_processing_steps=True,
-                    show_multi_epoch=True,
-                    show_comparative_bands=True,
-                    output_dir=subject_dir
-                )
-
-        if args.analysis in ['tf', 'all']:
-            print(f"\nRunning time-frequency analysis for {group_name}...")
-            output_dir = None if args.plot else group_tf_dir
-            # re-extract epochs for time-frequency analysis with correct tmin/tmax
-            tf_region_epochs, tf_region_channels_dict = analyze_region_specific_data(
-                region_labels,
-                subject_id_list,
-                sampling_frequency,
-                mapping_events,
-                event_dict_gest,
-                trigger_type,
-                tmin=-1.0,
-                tmax=3.0,
-                plot=False
+        # Run individual region analyses here if not using region-grouping...
+        if not args.region_grouping:
+            # Run analysis for this specific region group
+            run_region_analyses(
+                args=args,
+                region_epochs=region_epochs,
+                region_channels_dict=region_channels_dict,
+                region_labels=region_labels,
+                group_name=group_name,
+                subject_id_list=subject_id_list,
+                event_dict_gest=event_dict_gest,
+                mapping_events=mapping_events,
+                frequency_bands=frequency_bands,
+                trigger_type=trigger_type,
+                sampling_frequency=sampling_frequency,
+                bandpower_dir=bandpower_dir,
+                tf_dir=tf_dir,
+                manifold_dir=manifold_dir,
+                gesture_dir=gesture_dir,
+                align_dir=align_dir,
+                all_region_epochs=all_region_epochs,
+                all_region_channels_dict=all_region_channels_dict
             )
-            tfr_power_dict = perform_time_frequency_analysis(
-                tf_region_epochs,
-                tf_region_channels_dict,
-                region_labels,
-                tmin=-1.0,
-                tmax=3.0,
-                output_dir=output_dir
-            )
-            
-            # Generate summary visualization with all subjects
-            plot_tf_summary(
-                tfr_power_dict, 
-                region_channels_dict, 
-                region_labels, 
-                baseline=(-0.5, 0.0),
-                output_dir=group_tf_dir
-            )
+
+    # Extract and analyze data for all region groups together (brain-wide analysis)
+    if args.region_grouping and len(all_region_epochs) > 0:
+        print("\n===== Processing All Region Groups Together (Brain-Wide Analysis) =====")
         
-        if args.analysis in ['manifold', 'all']:
-            print(f"\nAnalyzing overall neural manifolds for {group_name}...")
-            output_dir = None if args.plot else group_manifold_dir
-            manifold_results = analyze_neural_manifolds(
-                region_epochs,
-                region_channels_dict,
-                region_labels,
-                bands=['delta', 'beta', 'high_gamma'],
-                n_components=3,
-                downsample_factor=1,
-                output_dir=output_dir
-            )
-            
-            # Generate comparison visualizations for each band
-            for band_name in manifold_results:
-                if len(manifold_results[band_name]) > 0:
-                    # Get times from first subject's epochs (with downsampling)
-                    first_subject = list(region_epochs.keys())[0]
-                    times = region_epochs[first_subject].times[::1]  # No downsampling in this case
-                    
-                    # Plot comparison of subjects for this band
-                    plot_manifold_comparison(
-                        manifold_results[band_name], 
-                        band_name, 
-                        times, 
-                        region_labels,
-                        output_dir=group_manifold_dir
-                    )
+        # Combine regions into a brain-wide analysis
+        brain_wide_epochs, brain_wide_channels_dict = combine_regions(
+            all_region_epochs, 
+            all_region_channels_dict
+        )
         
-        if args.analysis in ['gesture-manifolds', 'all']:
-            print(f"\nAnalyzing gesture-specific neural manifolds for {group_name}...")
-            output_dir = None if args.plot else group_gesture_dir
-            gesture_manifold_results = analyze_gesture_manifolds(
-                region_epochs,
-                region_channels_dict,
-                region_labels,
-                bands=['delta', 'beta', 'high_gamma'],
-                gestures=list(event_dict_gest.keys()),
-                n_components=3,
-                downsample_factor=1,
-                output_dir=output_dir
-            )
+        # Create output directories for brain-wide analysis
+        brain_wide_dir = "brain_wide"
+        brain_wide_bandpower_dir = os.path.join(bandpower_dir, brain_wide_dir)
+        brain_wide_tf_dir = os.path.join(tf_dir, brain_wide_dir)
+        brain_wide_manifold_dir = os.path.join(manifold_dir, brain_wide_dir)
+        brain_wide_gesture_dir = os.path.join(gesture_dir, brain_wide_dir)
+        brain_wide_align_dir = os.path.join(align_dir, brain_wide_dir)
+        ensure_dir(brain_wide_bandpower_dir)
+        ensure_dir(brain_wide_tf_dir)
+        ensure_dir(brain_wide_manifold_dir)
+        ensure_dir(brain_wide_gesture_dir)
+        ensure_dir(brain_wide_align_dir)
         
-        # include cca manifold aligning as a analysis parameter
-        if args.analysis in ['align-manifolds', 'all']:
-            print(f"\nComputing general manifolds and aligning using CCA for {group_name}...")
-            output_dir = None if args.plot else group_align_dir
-            # step 1: compute overall manifold
-            print("... Step 1: computing neural manifolds ...")
-            manifold_results = analyze_neural_manifolds(
-                region_epochs,
-                region_channels_dict,
-                region_labels,
-                frequency_bands,
-                n_components=3,
-                downsample_factor=1,
-                output_dir=output_dir
-            )
-            # step 2: align and compare manifolds between subjects
-            print("... Step 2: aligning manifolds across subjects using CCA ...")
-            cca_results = compare_subject_manifolds(
-                manifold_results,
-                subject_id_list, 
-                frequency_bands,
-                output_dir=output_dir
-            )
-            # step 3: visualize the CCA results
-            print("... Step 3: visualizing the CCA results ...")
-            visualize_canonical_correlations(
-                cca_results, 
-                frequency_bands,
-                output_dir=output_dir
-            )
-
-        if args.analysis in ['high-dim-alignment', 'all']:
-            print(f"\nRunning high-dimensional manifold alignment ({args.high_dim_components} components) for {group_name}...")
-            high_dim_dir = os.path.join(args.output_dir, 'high_dim_manifolds')
-            ensure_dir(high_dim_dir)
+        # Get a list of all region labels for the brain-wide analysis
+        all_region_labels = []
+        for regions in region_lists.values():
+            all_region_labels.extend(regions)
+        
+        # Print a summary of the combined data
+        print(f"\nSummary of brain-wide analysis data:")
+        print(f"Total subjects with data: {len(brain_wide_epochs)}")
+        print(f"Regions included: {', '.join(all_region_labels)}")
+        
+        for subject_id in brain_wide_epochs:
+            # Get the first available frequency band
+            first_band = next(iter(brain_wide_epochs[subject_id]))
+            print(f"\nSubject {subject_id}:")
+            print(f"  Number of channels: {len(brain_wide_channels_dict[subject_id])}")
+            print(f"  Number of epochs: {len(brain_wide_epochs[subject_id][first_band])}")
             
-            # Create region-specific output directory
-            group_high_dim_dir = os.path.join(high_dim_dir, group_name)
-            ensure_dir(group_high_dim_dir)
-            
-            # Set output directory based on interactive plotting preference
-            output_dir = None if args.plot else group_high_dim_dir
-            
-            # Step 1: compute high-dimensional neural manifolds
-            print("... Step 1: computing high-dimensional neural manifolds ...")
-            manifold_results = analyze_high_dim_neural_manifolds(
-                region_epochs,
-                region_channels_dict,
-                region_labels,
-                frequency_bands,
-                n_components=args.high_dim_components,
-                downsample_factor=1,
-                output_dir=output_dir
-            )
-            
-            # Step 2: align manifolds between subjects
-            print("... Step 2: aligning high-dimensional manifolds across subjects using CCA ...")
-            cca_results = align_high_dim_manifolds(
-                manifold_results,
-                subject_id_list, 
-                frequency_bands,
-                output_dir=output_dir
-            )
-            
-            # Step 3: visualize the mode-specific correlations
-            print("... Step 3: visualizing the mode-specific correlations ...")
-            visualize_mode_correlations(
-                cca_results, 
-                frequency_bands,
-                output_dir=output_dir
-            )
-
-        if args.analysis in ['cross-region-alignment', 'all']:
-            print(f"\nRunning cross-region manifold alignment analysis...")
-            
-            # Check if we have at least 2 regions for comparison
-            if len(all_region_epochs) < 2:
-                print("ERROR: Cross-region alignment requires at least 2 regions. Please provide multiple regions using --regions.")
-            else:
-                # Create output directory
-                cross_region_dir = os.path.join(args.output_dir, 'cross_region_manifolds')
-                ensure_dir(cross_region_dir)
-                
-                # Set output directory based on interactive plotting preference
-                output_dir = None if args.plot else cross_region_dir
-                
-                # Step 1: Align manifolds across regions and subjects
-                print("... Step 1: aligning neural manifolds across regions and subjects ...")
-                cross_region_results, region_manifold_results = align_cross_region_manifolds(
-                    all_region_epochs,
-                    all_region_channels_dict,
-                    region_lists,
-                    bands=frequency_bands,
-                    n_components=args.cross_region_components,
-                    downsample_factor=1,
-                    output_dir=output_dir
-                )
-                
-                # Step 2: Compute region similarity matrices
-                print("... Step 2: computing region similarity matrices ...")
-                similarity_matrices = compute_region_similarity_matrix(
-                    cross_region_results,
-                    bands=frequency_bands,
-                    method='mean'
-                )
-                
-                # Step 3: Analyze mode-specific correlations
-                print("... Step 3: analyzing mode-specific correlations ...")
-                mode_correlations = analyze_mode_specific_correlations(
-                    cross_region_results,
-                    bands=frequency_bands,
-                    n_modes=args.cross_region_components
-                )
-                
-                # Step 4: Compare within-region vs cross-region correlations
-                print("... Step 4: comparing within-region vs cross-region correlations ...")
-                comparison_results = compare_within_vs_cross_region_correlations(
-                    mode_correlations,
-                    bands=frequency_bands,
-                    n_modes=args.cross_region_components
-                )
-                
-                # Step 5: Visualize the results
-                print("... Step 5: visualizing cross-region correlation results ...")
-                visualize_cross_region_correlations(
-                    cross_region_results,
-                    similarity_matrices,
-                    mode_correlations,
-                    comparison_results,
-                    bands=frequency_bands,
-                    output_dir=output_dir
-                )
+            # Print event counts
+            for event_name, event_id in event_dict_gest.items():
+                try:
+                    event_count = len(brain_wide_epochs[subject_id][first_band][event_name])
+                    print(f"  {event_name} events: {event_count}")
+                except KeyError:
+                    print(f"  {event_name} events: not available")
+        
+        # Run the analyses with the combined data
+        run_region_analyses(
+            args=args,
+            region_epochs=brain_wide_epochs,
+            region_channels_dict=brain_wide_channels_dict,
+            region_labels=all_region_labels,
+            group_name=brain_wide_dir,
+            subject_id_list=global_subject_list,  # Use all subjects for brain-wide analysis
+            event_dict_gest=event_dict_gest,
+            mapping_events=mapping_events,
+            frequency_bands=frequency_bands,
+            trigger_type=trigger_type,
+            sampling_frequency=sampling_frequency,
+            bandpower_dir=bandpower_dir,
+            tf_dir=tf_dir,
+            manifold_dir=manifold_dir,
+            gesture_dir=gesture_dir,
+            align_dir=align_dir,
+            all_region_epochs=all_region_epochs,
+            all_region_channels_dict=all_region_channels_dict
+        )
 
     print("\nAnalysis completed successfully!")
 
