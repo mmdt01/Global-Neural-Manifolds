@@ -331,3 +331,8 @@ analysis/__pycache__/manifold_correlation.cpython-39.pyc
 visualization/__pycache__/manifold_correlation_viz.cpython-39.pyc
 analysis/__pycache__/cross_region_manifold.cpython-39.pyc
 visualization/__pycache__/cross_region_viz.cpython-39.pyc
+analysis/__pycache__/band_power_viz.cpython-39.pyc
+analysis/__pycache__/mean_activity.cpython-39.pyc
+data_loading/__pycache__/region_caching.cpython-39.pyc
+utils/__pycache__/run_analysis.cpython-39.pyc
+visualization/__pycache__/tsne_gesture_visualization.cpython-39.pyc
