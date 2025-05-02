@@ -161,6 +161,51 @@ def parse_arguments():
         default=None,
         help='Perplexity parameter for t-SNE (default: auto-calculated as sqrt(n_samples))'
     )
+
+    parser.add_argument(
+        '--classify-lfo',
+        action='store_true',
+        help='Run SVM classification of gestures from LFO mean activity'
+    )
+
+    parser.add_argument(
+        '--classify-lfo-multiclass',
+        action='store_true',
+        help='Run multi-class SVM classification (default: runs both pairwise and multi-class)'
+    )
+
+    parser.add_argument(
+        '--classify-lfo-pairwise',
+        action='store_true',
+        help='Run pairwise SVM classification (default: runs both pairwise and multi-class)'
+    )
+
+    parser.add_argument(
+        '--classify-lfo-folds',
+        type=int,
+        default=5,
+        help='Number of cross-validation folds for classification (default: 5)'
+    )
+
+    parser.add_argument(
+        '--classify-lfo-permutations',
+        type=int,
+        default=100,
+        help='Number of permutations for statistical testing (default: 100, 0 to disable)'
+    )
+
+    parser.add_argument(
+        '--classify-lfo-no-pca',
+        action='store_true',
+        help='Disable PCA dimensionality reduction before classification'
+    )
+
+    parser.add_argument(
+        '--classify-lfo-pca-components',
+        type=float,
+        default=0.95,
+        help='Number of PCA components to use or variance to explain (default: 0.95)'
+    )
     
     return parser.parse_args()
 
@@ -310,9 +355,9 @@ def main():
                     base_dir=cache_dir
                 )
 
-        # Plot all frequency bands for a specific subject - DELETE THIS LATER
-        from region_processing.epochs_extractor import plot_all_frequency_bands
-        plot_all_frequency_bands(region_epochs, region_channels_dict, event_dict_gest, subject_id=41)
+        # # Plot all frequency bands for a specific subject - DELETE THIS LATER
+        # from region_processing.epochs_extractor import plot_all_frequency_bands
+        # plot_all_frequency_bands(region_epochs, region_channels_dict, event_dict_gest, subject_id=41)
         
         # Store the results for this region group
         all_region_epochs[group_name] = region_epochs

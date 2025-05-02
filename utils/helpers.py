@@ -31,6 +31,9 @@ region_groups = {
     # pars opercularis regions
     "parsopercularis-rh": ["ctx-rh-parsopercularis", "wm-rh-parsopercularis"],
     "parsopercularis-lh": ["ctx-lh-parsopercularis", "wm-lh-parsopercularis"],
+    # precuneus regions
+    "precuneus-rh": ["ctx-rh-precuneus", "wm-rh-precuneus"],
+    "precuneus-lh": ["ctx-lh-precuneus", "wm-lh-precuneus"],
     # insula regions
     "insula-rh": ["ctx-rh-insula", "wm-rh-insula"],
     "insula-lh": ["ctx-lh-insula", "wm-lh-insula"],

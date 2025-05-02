@@ -4,6 +4,7 @@ Run full analyses on region-specific or brain-wide data.
 
 import os
 import numpy as np
+from scipy.stats import sem
 from utils.helpers import ensure_dir
 from analysis import (
     perform_time_frequency_analysis,
@@ -17,7 +18,9 @@ from analysis import (
     compute_region_similarity_matrix,
     analyze_mode_specific_correlations,
     compare_within_vs_cross_region_correlations,
-    analyze_mean_delta_activity
+    analyze_mean_delta_activity,
+    compute_gesture_mean_activity,
+    analyze_gesture_classification
 )
 from visualization import (
     plot_tf_summary,
@@ -25,7 +28,7 @@ from visualization import (
     visualize_canonical_correlations,
     visualize_mode_correlations,
     visualize_cross_region_correlations,
-    visualize_gesture_tsne,
+    visualize_gesture_tsne
 )
 
 def run_region_analyses(args, region_epochs, region_channels_dict, region_labels, group_name,
@@ -106,6 +109,136 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
             output_dir=output_dir,
             band_name='delta'  # Explicitly specify band
         )
+
+        # Run gesture classification if requested
+        if args.classify_lfo or args.classify_lfo_pairwise or args.classify_lfo_multiclass:
+            print(f"\nRunning gesture classification analysis for {group_name}...")
+            # Create output directory for classification analysis
+            classification_dir = os.path.join(args.output_dir, 'classification')
+            ensure_dir(classification_dir)
+            
+            # Create group-specific output directory
+            group_classification_dir = os.path.join(classification_dir, group_name)
+            ensure_dir(group_classification_dir)
+            
+            # Set output directory based on interactive plotting preference
+            classification_output_dir = None if args.plot else group_classification_dir
+            
+            # Determine which classification types to run
+            run_pairwise = args.classify_lfo or args.classify_lfo_pairwise
+            run_multiclass = args.classify_lfo or args.classify_lfo_multiclass
+            
+            # Run classification for each subject
+            classification_results = {}
+            
+            for subject_id, epochs_dict in region_epochs.items():
+                print(f"Running classification for Subject {subject_id}...")
+                
+                # Skip if we don't have delta band
+                if 'delta' not in epochs_dict:
+                    print(f"Delta band not found for Subject {subject_id}, skipping classification...")
+                    continue
+                
+                # Prepare trial data
+                _, trial_data = compute_gesture_mean_activity(
+                    epochs_dict, band_name='delta'
+                )
+                
+                # Create subject-specific output directory if needed
+                if classification_output_dir is not None:
+                    subject_classification_dir = os.path.join(classification_output_dir, f"subject_{subject_id}")
+                    ensure_dir(subject_classification_dir)
+                else:
+                    subject_classification_dir = None
+                
+                # Run classification analysis
+                subject_results = analyze_gesture_classification(
+                    trial_data,
+                    subject_id=subject_id,
+                    region_label=region_labels,
+                    output_dir=subject_classification_dir,
+                    n_folds=args.classify_lfo_folds,
+                    n_permutations=args.classify_lfo_permutations,
+                    use_pca=not args.classify_lfo_no_pca,
+                    pca_components=args.classify_lfo_pca_components,
+                    run_pairwise=run_pairwise,
+                    run_multiclass=run_multiclass,
+                    n_jobs=-1  # Use all available processors
+                )
+                
+                # Store results for this subject
+                classification_results[subject_id] = subject_results
+            
+            # Print summary of classification results
+            print("\nClassification analysis summary:")
+            print(f"Total subjects analyzed: {len(classification_results)}")
+            
+            if run_multiclass:
+                # Collect multiclass accuracies
+                multiclass_accs = []
+                multiclass_pvals = []
+                
+                for subject_id, results in classification_results.items():
+                    if results['multiclass'] is not None and not np.isnan(results['multiclass']['accuracy']):
+                        acc = results['multiclass']['accuracy']
+                        pval = results['multiclass']['p_value']
+                        multiclass_accs.append(acc)
+                        multiclass_pvals.append(pval)
+                        significance = ""
+                        if not np.isnan(pval):
+                            if pval < 0.05:
+                                significance = "*"
+                            if pval < 0.01:
+                                significance = "**"
+                            if pval < 0.001:
+                                significance = "***"
+                        print(f"  Subject {subject_id}: Multi-class accuracy = {acc:.2f} {significance}")
+                
+                if multiclass_accs:
+                    mean_acc = np.mean(multiclass_accs)
+                    std_acc = np.std(multiclass_accs)
+                    sem_acc = sem(multiclass_accs)
+                    significant_count = np.sum(np.array(multiclass_pvals) < 0.05)
+                    
+                    print(f"\nAverage multi-class accuracy: {mean_acc:.2f} ± {sem_acc:.2f} SEM")
+                    print(f"Significant classification ({significant_count}/{len(multiclass_accs)} subjects)")
+            
+            if run_pairwise:
+                # Collect pairwise accuracies for all gesture pairs
+                all_pair_accuracies = {}
+                
+                for subject_id, results in classification_results.items():
+                    if results['pairwise'] is not None and not np.all(np.isnan(results['pairwise']['accuracy_matrix'])):
+                        acc_matrix = results['pairwise']['accuracy_matrix']
+                        gesture_labels = results['pairwise']['gesture_labels']
+                        
+                        # Extract accuracies for each pair
+                        for i in range(len(gesture_labels)):
+                            for j in range(i+1, len(gesture_labels)):
+                                g1, g2 = gesture_labels[i], gesture_labels[j]
+                                pair_key = f"{g1}_vs_{g2}"
+                                
+                                if pair_key not in all_pair_accuracies:
+                                    all_pair_accuracies[pair_key] = []
+                                
+                                # Add accuracy if it's valid
+                                if not np.isnan(acc_matrix[i, j]):
+                                    all_pair_accuracies[pair_key].append(acc_matrix[i, j])
+                
+                # Calculate average accuracies for each pair
+                avg_pair_accuracies = {}
+                
+                for pair_key, accs in all_pair_accuracies.items():
+                    if accs:
+                        avg_acc = np.mean(accs)
+                        avg_pair_accuracies[pair_key] = avg_acc
+                
+                # Sort pairs by average accuracy
+                sorted_pairs = sorted(avg_pair_accuracies.items(), key=lambda x: x[1], reverse=True)
+                
+                print("\nAverage pairwise classification accuracies:")
+                for pair_key, avg_acc in sorted_pairs:
+                    print(f"  {pair_key}: {avg_acc:.2f}")
         
         # Run t-SNE visualization for each subject
         if args.tsne:

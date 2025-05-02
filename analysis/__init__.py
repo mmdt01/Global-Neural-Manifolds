@@ -30,6 +30,13 @@ from .mean_activity import (
     compute_mahalanobis_distance_matrix,
     visualize_distance_matrix
 )
+from .lfo_classification import (
+    prepare_data_for_classification,
+    run_pairwise_classification,
+    run_multiclass_classification,
+    visualize_pairwise_classification,
+    visualize_multiclass_classification
+)
 
 def perform_time_frequency_analysis(region_epochs, region_channels_dict, region_labels,
                                   tmin=None, tmax=None, output_dir=None):
@@ -474,6 +481,98 @@ def analyze_mean_delta_activity(region_epochs, region_channels_dict, region_labe
             'gesture_centroids': gesture_centroids,
             'trial_data': trial_data
         }
+    
+    return results
+
+def analyze_gesture_classification(trial_data, subject_id=None, region_label=None, output_dir=None,
+                                 n_folds=5, n_permutations=100, use_pca=True, pca_components=0.95,
+                                 run_pairwise=True, run_multiclass=True, n_jobs=-1, random_state=42):
+    """
+    Analyze gesture classification using SVM.
+    
+    Parameters:
+    -----------
+    trial_data : dict
+        Dictionary mapping gesture names to arrays of trial data (trials x channels)
+    subject_id : str or int, optional
+        Subject ID for the plot title
+    region_label : str, optional
+        Brain region label for the plot title
+    output_dir : str, optional
+        Directory to save plots. If None, plots are displayed but not saved.
+    n_folds : int, optional
+        Number of cross-validation folds
+    n_permutations : int, optional
+        Number of permutations for statistical testing, or 0 to skip
+    use_pca : bool, optional
+        Whether to apply PCA before classification
+    pca_components : float or int, optional
+        Number of PCA components to use or variance to explain
+    run_pairwise : bool, optional
+        Whether to run pairwise classification
+    run_multiclass : bool, optional
+        Whether to run multi-class classification
+    n_jobs : int, optional
+        Number of parallel jobs to run
+    random_state : int, optional
+        Random seed for reproducibility
+    
+    Returns:
+    --------
+    results : dict
+        Dictionary containing classification results
+    """
+    # Initialize results dictionary
+    results = {
+        'pairwise': None,
+        'multiclass': None,
+        'figures': {}
+    }
+    
+    # Prepare data for classification
+    X, y, gesture_labels = prepare_data_for_classification(trial_data)
+    
+    # Skip if we don't have enough data
+    if len(X) < 10 or len(gesture_labels) < 2:
+        print("Not enough data for classification analysis")
+        return results
+    
+    print(f"Analyzing gesture classification for {len(gesture_labels)} gestures, " 
+          f"{len(X)} trials, {X.shape[1]} channels")
+    
+    # Run pairwise classification if requested
+    if run_pairwise:
+        print("\nRunning pairwise classification...")
+        pairwise_results = run_pairwise_classification(
+            X, y, n_folds=n_folds, n_permutations=n_permutations,
+            use_pca=use_pca, pca_components=pca_components,
+            n_jobs=n_jobs, random_state=random_state
+        )
+        results['pairwise'] = pairwise_results
+        
+        # Visualize pairwise results
+        pairwise_figs = visualize_pairwise_classification(
+            pairwise_results, subject_id=subject_id, region_label=region_label,
+            output_dir=output_dir
+        )
+        results['figures'].update(pairwise_figs)
+    
+    # Run multi-class classification if requested
+    if run_multiclass:
+        print("\nRunning multi-class classification...")
+        multiclass_results = run_multiclass_classification(
+            X, y, n_folds=n_folds, n_permutations=n_permutations,
+            use_pca=use_pca, pca_components=pca_components,
+            random_state=random_state
+        )
+        results['multiclass'] = multiclass_results
+        
+        # Visualize multi-class results
+        multiclass_figs = visualize_multiclass_classification(
+            multiclass_results, subject_id=subject_id, region_label=region_label,
+            output_dir=output_dir
+        )
+        results['figures'].update(multiclass_figs)
     
     return results
 
