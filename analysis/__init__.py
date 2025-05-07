@@ -3,6 +3,7 @@ Analysis module for neural data.
 """
 import os
 import numpy as np
+from utils.helpers import ensure_dir
 
 from .time_frequency import compute_time_frequency
 from .manifold import (
@@ -35,7 +36,8 @@ from .lfo_classification import (
     run_pairwise_classification,
     run_multiclass_classification,
     visualize_pairwise_classification,
-    visualize_multiclass_classification
+    visualize_multiclass_classification,
+    analyze_cross_region_classification
 )
 
 def perform_time_frequency_analysis(region_epochs, region_channels_dict, region_labels,
@@ -576,3 +578,33 @@ def analyze_gesture_classification(trial_data, subject_id=None, region_label=Non
     
     return results
 
+def cross_region_lfo_classification_analysis(args, all_region_results):
+    """
+    Run cross-region analysis on classification results and generate box plot visualization.
+   
+    Parameters:
+    -----------
+    args : argparse.Namespace
+        Command line arguments
+    all_region_results : dict
+        Dictionary mapping region names to classification results
+   
+    Returns:
+    --------
+    region_comparison : dict
+        Dictionary containing cross-region pairwise classification results
+    """
+    # Create output directory
+    cross_region_dir = os.path.join(args.output_dir, 'cross_region_classification')
+    ensure_dir(cross_region_dir)
+   
+    # Run simplified cross-region analysis that focuses on the box plot
+    print("\nAnalyzing pairwise classification performance across brain regions...")
+    region_comparison = analyze_cross_region_classification(
+        all_region_results,
+        output_dir=cross_region_dir
+    )
+    
+    print(f"\nBox plot visualization saved to {os.path.join(cross_region_dir, 'region_pairwise_boxplot.png')}")
+    
+    return region_comparison

@@ -753,4 +753,190 @@ def visualize_multiclass_classification(results, subject_id=None, region_label=N
     
     return figs
 
+def analyze_cross_region_classification(classification_results_by_region, output_dir=None):
+    """
+    Analyze pairwise classification performance across different brain regions
+    and create a box plot visualization.
+    
+    Parameters:
+    -----------
+    classification_results_by_region : dict
+        Dictionary mapping region names to dictionaries of classification results by subject
+    output_dir : str, optional
+        Directory to save visualizations
+    
+    Returns:
+    --------
+    region_comparison : dict
+        Dictionary containing cross-region pairwise classification results
+    """
+    # Initialize simplified results dictionary - only keep what's needed for box plot
+    region_comparison = {
+        'pairwise': {
+            'pair_accuracies_by_region': {}
+        }
+    }
+    
+    # Process each region
+    for region_name, region_results in classification_results_by_region.items():
+        # Skip if no results for this region
+        if not region_results:
+            print(f"No classification results for {region_name}")
+            continue
+            
+        print(f"Collecting pairwise classification results for {region_name}...")
+        
+        # Process pairwise results only
+        pair_accuracies = {}
+        
+        for subject_id, subject_results in region_results.items():
+            if 'pairwise' in subject_results and subject_results['pairwise'] is not None:
+                acc_matrix = subject_results['pairwise']['accuracy_matrix']
+                gesture_labels = subject_results['pairwise']['gesture_labels']
+                
+                # Skip if no valid accuracy matrix
+                if np.all(np.isnan(acc_matrix)):
+                    continue
+                
+                # Extract pairwise accuracies
+                for i in range(len(gesture_labels)):
+                    for j in range(i+1, len(gesture_labels)):
+                        if not np.isnan(acc_matrix[i, j]):
+                            pair_key = f"{gesture_labels[i]}_vs_{gesture_labels[j]}"
+                            
+                            if pair_key not in pair_accuracies:
+                                pair_accuracies[pair_key] = []
+                                
+                            pair_accuracies[pair_key].append(acc_matrix[i, j])
+        
+        # Store pairwise results for this region if we have any
+        if pair_accuracies:
+            region_comparison['pairwise']['pair_accuracies_by_region'][region_name] = pair_accuracies
+    
+    # Create box plot visualization if we have data and an output directory
+    if output_dir is not None and region_comparison['pairwise']['pair_accuracies_by_region']:
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Create box plot
+        visualize_region_boxplot_comparison(region_comparison, output_dir)
+        
+        # Print summary info
+        print("\nRegion Pairwise Classification Summary:")
+        for region, pair_accuracies in region_comparison['pairwise']['pair_accuracies_by_region'].items():
+            # Flatten all accuracies for this region
+            all_accs = [acc for accs in pair_accuracies.values() for acc in accs]
+            if all_accs:
+                print(f"  {region}: {len(pair_accuracies)} pairs, {len(all_accs)} samples, " +
+                      f"median acc: {np.median(all_accs):.2f}")
+    
+    return region_comparison
 
+def visualize_region_boxplot_comparison(region_comparison, output_dir):
+    """
+    Create a box plot comparing the distribution of pairwise classification 
+    accuracies across different brain regions using Seaborn.
+    
+    Parameters:
+    -----------
+    region_comparison : dict
+        Dictionary containing cross-region comparison results
+    output_dir : str
+        Directory to save visualizations
+    """
+    # Check if we have pairwise accuracy data
+    if not region_comparison['pairwise']['pair_accuracies_by_region']:
+        print("No pairwise accuracy data available for box plot visualization")
+        return
+    
+    # Create figure
+    plt.figure(figsize=(14, 8))
+    
+    # Prepare data for box plot - convert to format suitable for seaborn
+    all_accuracies = []
+    
+    # Sort regions by median accuracy (highest to lowest)
+    region_medians = {}
+    
+    for region, pair_accuracies in region_comparison['pairwise']['pair_accuracies_by_region'].items():
+        # Flatten all accuracies for this region into a single list
+        region_accuracies = []
+        for pair, accs in pair_accuracies.items():
+            region_accuracies.extend(accs)
+        
+        if region_accuracies:
+            region_medians[region] = np.median(region_accuracies)
+            # Store each accuracy with its region for seaborn
+            for acc in region_accuracies:
+                all_accuracies.append({'Region': region, 'Accuracy': acc})
+    
+    # Sort regions by median accuracy
+    sorted_regions = sorted(region_medians.keys(), key=lambda r: region_medians[r], reverse=True)
+    
+    # Convert to DataFrame for Seaborn
+    import pandas as pd
+    df = pd.DataFrame(all_accuracies)
+    
+    # Create custom order for regions
+    if sorted_regions:
+        df['Region'] = pd.Categorical(df['Region'], categories=sorted_regions, ordered=True)
+    
+    # Create box plot using seaborn
+    ax = sns.boxplot(
+        x='Region', 
+        y='Accuracy', 
+        data=df,
+        palette='crest',  # Use crest color palette
+        width=0.6,
+        notch=False,
+        showfliers=True,
+        boxprops={'alpha': 0.8, 'edgecolor': 'black', 'linewidth': 1.5},
+        whiskerprops={'color': 'black', 'linewidth': 1.5},
+        capprops={'color': 'black', 'linewidth': 1.5},
+        medianprops={'color': 'darkred', 'linewidth': 2},
+        flierprops={'marker': 'o', 'markerfacecolor': 'red', 'markersize': 4, 'alpha': 0.6}
+    )
+    
+    # Add chance level line (0.5 for binary classification)
+    plt.axhline(y=0.5, color='red', linestyle='--', linewidth=1.5, label='Chance level')
+    
+    # Set labels and title
+    plt.xlabel('Brain Region', fontsize=12)
+    plt.ylabel('Pairwise Classification Accuracy', fontsize=12)
+    plt.title('Distribution of Pairwise Classification Accuracies Across Brain Regions', fontsize=14)
+    
+    # Set x-tick labels (rotate if necessary)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+    
+    # Set y-axis limits with some padding
+    plt.ylim([0.45, 1.05])
+    
+    # Add legend
+    plt.legend(loc='lower right')
+    
+    # Add grid lines for easier reading of values
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # Add text annotations with sample sizes
+    for i, region in enumerate(sorted_regions):
+        pair_accuracies = region_comparison['pairwise']['pair_accuracies_by_region'][region]
+        total_samples = sum(len(accs) for accs in pair_accuracies.values())
+        total_pairs = len(pair_accuracies)
+        
+        plt.annotate(f'n={total_samples}\n({total_pairs} pairs)', 
+                    xy=(i, 0.47), 
+                    ha='center', 
+                    va='top',
+                    fontsize=9)
+    
+    # Tight layout to ensure everything fits
+    plt.tight_layout()
+    
+    # Save the figure
+    plt.savefig(os.path.join(output_dir, 'region_pairwise_boxplot.png'), dpi=300, bbox_inches='tight')
+    
+    # Close the figure to free up memory
+    plt.close()
+    
+    print(f"Box plot visualization saved to {os.path.join(output_dir, 'region_pairwise_boxplot.png')}")
+    

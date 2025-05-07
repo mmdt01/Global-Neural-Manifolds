@@ -20,7 +20,8 @@ from analysis import (
     compare_within_vs_cross_region_correlations,
     analyze_mean_delta_activity,
     compute_gesture_mean_activity,
-    analyze_gesture_classification
+    analyze_gesture_classification,
+    cross_region_lfo_classification_analysis
 )
 from visualization import (
     plot_tf_summary,
@@ -82,6 +83,12 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
     ensure_dir(group_manifold_dir)
     ensure_dir(group_gesture_dir)
     ensure_dir(group_align_dir)
+
+    # Initialize dictionary to store classification results if it doesn't exist
+    if not hasattr(run_region_analyses, 'all_region_classification_results'):
+        run_region_analyses.all_region_classification_results = {}
+        # Also track when we've performed cross-region analysis
+        run_region_analyses.cross_region_analysis_performed = False
     
     # Run selected analyses based on command line arguments
     if args.analysis in ['none']:
@@ -89,6 +96,7 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
 
     if args.analysis in ['mean-activity', 'all']:
         print(f"\nComputing static property of LFOs for {group_name}...")
+
         # Create output directory for mean activity analysis
         mean_activity_dir = os.path.join(args.output_dir, 'mean_activity')
         ensure_dir(mean_activity_dir)
@@ -99,6 +107,10 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
         
         # Set output directory based on interactive plotting preference
         output_dir = None if args.plot else group_mean_activity_dir
+
+        # Use the first frequency band by default
+        frequency_band = frequency_bands[0]  
+        print(f"Using frequency band: {frequency_band}")
         
         # Analyze mean activity (using delta band by default)
         mean_activity_results = analyze_mean_delta_activity(
@@ -107,7 +119,7 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
             region_labels,
             event_dict=event_dict_gest,
             output_dir=output_dir,
-            band_name='delta'  # Explicitly specify band
+            band_name=frequency_band
         )
 
         # Run gesture classification if requested
@@ -134,14 +146,9 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
             for subject_id, epochs_dict in region_epochs.items():
                 print(f"Running classification for Subject {subject_id}...")
                 
-                # Skip if we don't have delta band
-                if 'delta' not in epochs_dict:
-                    print(f"Delta band not found for Subject {subject_id}, skipping classification...")
-                    continue
-                
                 # Prepare trial data
                 _, trial_data = compute_gesture_mean_activity(
-                    epochs_dict, band_name='delta'
+                    epochs_dict, band_name=frequency_band
                 )
                 
                 # Create subject-specific output directory if needed
@@ -168,6 +175,9 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
                 
                 # Store results for this subject
                 classification_results[subject_id] = subject_results
+
+            # Store the results for this region
+            run_region_analyses.all_region_classification_results[group_name] = classification_results
             
             # Print summary of classification results
             print("\nClassification analysis summary:")
@@ -239,6 +249,12 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
                 print("\nAverage pairwise classification accuracies:")
                 for pair_key, avg_acc in sorted_pairs:
                     print(f"  {pair_key}: {avg_acc:.2f}")
+
+            print("\n===== Running Cross-Region Classification Analysis =====")
+            region_comparison = cross_region_lfo_classification_analysis(
+                        args, 
+                        run_region_analyses.all_region_classification_results
+                    )
         
         # Run t-SNE visualization for each subject
         if args.tsne:
@@ -257,17 +273,12 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
             for subject_id, epochs_dict in region_epochs.items():
                 print(f"Creating t-SNE visualization for Subject {subject_id}...")
                 
-                # Check if we have delta band
-                if 'delta' not in epochs_dict:
-                    print(f"Delta band not found for Subject {subject_id}, skipping t-SNE...")
-                    continue
-                
                 # Create t-SNE visualizations
                 tsne_results = visualize_gesture_tsne(
                     epochs_dict,
                     subject_id=subject_id,
                     region_label=str(region_labels),
-                    band_name='delta',
+                    band_name=frequency_band,
                     output_dir=tsne_output_dir,
                     perplexity=args.tsne_perplexity,
                     show_2d=True,
