@@ -13,6 +13,9 @@ region_groups = {
     # postcentral regions
     "postcentral-rh": ["ctx-rh-postcentral", "wm-rh-postcentral"],
     "postcentral-lh": ["ctx-lh-postcentral", "wm-lh-postcentral"],
+    # paracentral regions
+    "paracentral-rh": ["ctx-rh-paracentral", "wm-rh-paracentral"],
+    "paracentral-lh": ["ctx-lh-paracentral", "wm-lh-paracentral"],
     # superior parietal regions
     "superiorparietal-rh": ["ctx-rh-superiorparietal", "wm-rh-superiorparietal"],
     "superiorparietal-lh": ["ctx-lh-superiorparietal", "wm-lh-superiorparietal"],
@@ -37,6 +40,30 @@ region_groups = {
     # insula regions
     "insula-rh": ["ctx-rh-insula", "wm-rh-insula"],
     "insula-lh": ["ctx-lh-insula", "wm-lh-insula"],
+    # superior temporal regions
+    "superiortemporal-rh": ["ctx-rh-superiortemporal", "wm-rh-superiortemporal"],
+    "superiortemporal-lh": ["ctx-lh-superiortemporal", "wm-lh-superiortemporal"],
+    # middle temporal regions
+    "middletemporal-rh": ["ctx-rh-middletemporal", "wm-rh-middletemporal"],
+    "middletemporal-lh": ["ctx-lh-middletemporal", "wm-lh-middletemporal"],
+    # inferior temporal regions
+    "inferiortemporal-rh": ["ctx-rh-inferiortemporal", "wm-rh-inferiortemporal"],
+    "inferiortemporal-lh": ["ctx-lh-inferiortemporal", "wm-lh-inferiortemporal"],
+    # fusiform regions
+    "fusiform-rh": ["ctx-rh-fusiform", "wm-rh-fusiform"],
+    "fusiform-lh": ["ctx-lh-fusiform", "wm-lh-fusiform"],
+    # parahippocampal regions
+    "parahippocampal-rh": ["ctx-rh-parahippocampal", "wm-rh-parahippocampal"],
+    "parahippocampal-lh": ["ctx-lh-parahippocampal", "wm-lh-parahippocampal"],
+    # lateral occipital regions
+    "lateraloccipital-rh": ["ctx-rh-lateraloccipital", "wm-rh-lateraloccipital"],
+    "lateraloccipital-lh": ["ctx-lh-lateraloccipital", "wm-lh-lateraloccipital"],
+    # pericalcarine regions
+    "pericalcarine-rh": ["ctx-rh-pericalcarine", "wm-rh-pericalcarine"],
+    "pericalcarine-lh": ["ctx-lh-pericalcarine", "wm-lh-pericalcarine"],
+    # lingual regions
+    "lingual-rh": ["ctx-rh-lingual", "wm-rh-lingual"],
+    "lingual-lh": ["ctx-lh-lingual", "wm-lh-lingual"]
 }
 
 def ensure_dir(directory):
