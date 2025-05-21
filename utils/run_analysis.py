@@ -419,33 +419,35 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
         )
     
     if args.analysis in ['manifold', 'all']:
-        print(f"\nAnalyzing overall neural manifolds for {group_name}...")
+        print(f"\nAnalyzing neural manifolds for {group_name}...")
+        print(f"Using frequency bands: {frequency_bands}")
         output_dir = None if args.plot else group_manifold_dir
+
         manifold_results = analyze_neural_manifolds(
             region_epochs,
             region_channels_dict,
             region_labels,
-            bands=['delta', 'beta', 'high_gamma'],
+            bands=frequency_bands,  # Pass all frequency bands
             n_components=3,
-            downsample_factor=1,
             output_dir=output_dir
         )
         
         # Generate comparison visualizations for each band
         for band_name in manifold_results:
             if len(manifold_results[band_name]) > 0:
-                # Get times from first subject's epochs (with downsampling)
-                first_subject = list(region_epochs.keys())[0]
-                times = region_epochs[first_subject][next(iter(region_epochs[first_subject].keys()))].times[::1]  # No downsampling in this case
-                
-                # Plot comparison of subjects for this band
-                plot_manifold_comparison(
-                    manifold_results[band_name], 
-                    band_name, 
-                    times, 
-                    region_labels,
-                    output_dir=group_manifold_dir
-                )
+                # Get times from first subject's epochs for this specific band
+                first_subject = next(iter(manifold_results[band_name].keys()))
+                if first_subject in region_epochs and band_name in region_epochs[first_subject]:
+                    times = region_epochs[first_subject][band_name].times
+                    
+                    # Plot comparison of subjects for this band
+                    plot_manifold_comparison(
+                        manifold_results[band_name], 
+                        band_name, 
+                        times, 
+                        region_labels,
+                        output_dir=group_manifold_dir
+                    )
     
     if args.analysis in ['gesture-manifolds', 'all']:
         print(f"\nAnalyzing gesture-specific neural manifolds for {group_name}...")

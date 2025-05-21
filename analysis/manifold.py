@@ -11,25 +11,24 @@ from scipy.linalg import qr, svd, inv
 
 from .band_power import compute_band_power, get_frequency_bands
 
-def compute_neural_manifold(region_epochs, region_channels_dict, band_name, n_components=3, 
-                          downsample_factor=1, plot=True, plot_title=None, output_dir=None):
+def compute_neural_manifold(region_epochs, region_channels_dict, band_name, n_components=3,
+                            plot=True, plot_title=None, output_dir=None):
     """
     This function computes the neural manifold for each subject's region by applying PCA to the band power data.
-    It also generates a 3D plot of the manifold if requested and if the number of components is 3.
-    The manifold is computed for each subject separately, and the explained variance ratios are also returned.
+    It uses the pre-computed band power data directly from the epochs objects.
     
     Parameters:
     -----------
     region_epochs : dict
-        Dictionary mapping subject IDs to region-specific epochs objects
+        Nested dictionary mapping subject IDs to frequency bands to epochs objects with band power
     region_channels_dict : dict
         Dictionary mapping subject IDs to lists of channel names
     band_name : str
-        Name of the frequency band to analyze (delta, theta, alpha, beta, low_gamma, high_gamma, broad)
+        Name of the frequency band to analyze
     n_components : int, optional
         Number of PCA components to compute
     downsample_factor : int, optional
-        Factor by which to downsample the data before PCA
+        Factor by which to downsample the data before PCA (usually 1 as no downsampling needed)
     plot : bool, optional
         Whether to plot the low-dimensional representation
     plot_title : str, optional
@@ -45,26 +44,27 @@ def compute_neural_manifold(region_epochs, region_channels_dict, band_name, n_co
             'explained_variance': array of explained variance ratios
             'pca': fitted PCA object
     """
-    # Get frequency bands dictionary
-    bands = get_frequency_bands()
-    
-    # Check if the requested band exists
-    if band_name not in bands:
-        raise ValueError(f"Unknown band name: {band_name}. Available bands: {list(bands.keys())}")
-    
     # Initialize results dictionary
     manifold_dict = {}
     
     # Process each subject
-    for subject_id, epochs in region_epochs.items():
+    for subject_id, band_epochs in region_epochs.items():
+        # Skip if this subject doesn't have data for the specified band
+        if band_name not in band_epochs:
+            print(f"No {band_name} band data for Subject {subject_id}, skipping...")
+            continue
+        
         print(f"\nComputing neural manifold for Subject {subject_id}, {band_name} band...")
         
         try:
             # Number of channels for this subject
             num_channels = len(region_channels_dict[subject_id])
             
-            # Compute band power
-            band_power = compute_band_power(epochs, band_name, downsample_factor)
+            # Get the specific band's epochs object
+            epochs = band_epochs[band_name]
+            
+            # Extract the data directly - it's already band power
+            band_power = epochs.get_data()  # Shape: (n_epochs, n_channels, n_times)
             
             # Get dimensions
             n_epochs, n_channels, n_times = band_power.shape
@@ -99,8 +99,8 @@ def compute_neural_manifold(region_epochs, region_channels_dict, band_name, n_co
                 fig = plt.figure(figsize=(10, 8))
                 ax = fig.add_subplot(111, projection='3d')
                 
-                # Get downsampled time points
-                times = epochs.times[::downsample_factor]
+                # Get time points
+                times = epochs.times
                 
                 # Create a colormap for time
                 norm = plt.Normalize(times.min(), times.max())

@@ -6,6 +6,7 @@ import numpy as np
 from utils.helpers import ensure_dir
 
 from .time_frequency import compute_time_frequency
+
 from .manifold import (
     compute_neural_manifold,
     compute_gesture_manifolds,
@@ -92,20 +93,20 @@ def perform_time_frequency_analysis(region_epochs, region_channels_dict, region_
     return tfr_power_dict
 
 def analyze_neural_manifolds(region_epochs, region_channels_dict, region_labels, 
-                           bands=None, n_components=3, downsample_factor=1, output_dir=None):
+                           bands, n_components=3, output_dir=None):
     """
     Analyze neural manifolds for region-specific epoch data across multiple frequency bands.
     
     Parameters:
     -----------
     region_epochs : dict
-        Dictionary mapping subject IDs to region-specific epochs objects
+        Nested dictionary mapping subject IDs to frequency bands to epochs objects
     region_channels_dict : dict
         Dictionary mapping subject IDs to lists of channel names
     region_labels : list
         List of brain region names included in the analysis
-    bands : list, optional
-        List of frequency bands to analyze. If None, uses ['delta', 'beta', 'high_gamma']
+    bands : list
+        List of frequency bands to analyze
     n_components : int, optional
         Number of PCA components to compute
     downsample_factor : int, optional
@@ -118,10 +119,10 @@ def analyze_neural_manifolds(region_epochs, region_channels_dict, region_labels,
     manifold_results : dict
         Dictionary mapping band names to manifold dictionaries
     """
-    # Set default bands if not provided
-    if bands is None:
-        bands = ['delta', 'beta', 'high_gamma']
-    
+    # Validate bands parameter
+    if not bands:
+        raise ValueError("No frequency bands specified for analysis.")
+
     # Initialize results dictionary
     manifold_results = {}
     
@@ -129,13 +130,20 @@ def analyze_neural_manifolds(region_epochs, region_channels_dict, region_labels,
     for band_name in bands:
         print(f"\n\n===== Analyzing {band_name.upper()} band neural manifolds =====")
         
+        # Check if any subjects have this band
+        subjects_with_band = [subject_id for subject_id, band_dict in region_epochs.items() 
+                             if band_name in band_dict]
+        
+        if not subjects_with_band:
+            print(f"No subjects have data for band '{band_name}', skipping...")
+            continue
+        
         # Compute neural manifolds
         manifold_dict = compute_neural_manifold(
-            region_epochs,
+            region_epochs,  # Pass the full nested dictionary
             region_channels_dict,
             band_name,
             n_components=n_components,
-            downsample_factor=downsample_factor,
             plot=True,
             plot_title=f"Regions: {', '.join(region_labels)}",
             output_dir=output_dir
