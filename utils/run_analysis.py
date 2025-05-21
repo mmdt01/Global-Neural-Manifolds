@@ -11,7 +11,6 @@ from analysis import (
     analyze_neural_manifolds,
     analyze_gesture_manifolds,
     compare_subject_manifolds,
-    visualize_signal_transform,
     analyze_high_dim_neural_manifolds,
     align_high_dim_manifolds,
     align_cross_region_manifolds,
@@ -37,9 +36,8 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
                         trigger_type, sampling_frequency, bandpower_dir, tf_dir, manifold_dir,
                         gesture_dir, align_dir, all_region_epochs, all_region_channels_dict):
     """    
-    This function encapsulates all the region-specific analyses that were previously
-    in the main loop, allowing them to be run either on individual regions or on
-    the combined brain-wide data.
+    This function encapsulates all the region-specific analyses, 
+    which can be run on either individual regions or on the combined brain-wide data.
     
     Parameters:
     -----------
@@ -360,36 +358,6 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
                 print(f"\nMost consistently dissimilar gestures: {pair[0]} and {pair[1]}")
                 print(f"  Identified as most dissimilar in {count}/{len(mean_activity_results)} subjects")
                 print(f"  Mean distance across all subjects: {mean_dist:.2f}")
-
-    if args.analysis in ['visualize-band-power', 'all']:
-        print(f"\nVisualizing signal transformation for {group_name}...")
-        # Generate visualizations for each subject
-        for subject_id, epochs in region_epochs.items():
-            # Skip if no epochs for this subject
-            if len(epochs) == 0:
-                print(f"No epochs for Subject {subject_id}, skipping...")
-                continue
-
-            # Create a subject-specific output directory
-            subject_dir = os.path.join(bandpower_dir, f"subject_{subject_id}")
-            ensure_dir(subject_dir)
-            
-            # Region label for titles
-            region_label = group_name
-            
-            # Run all visualizations with the high-level function
-            figures = visualize_signal_transform(
-                epochs,
-                subject_id,
-                region_label,
-                bands=frequency_bands,
-                n_channels=args.n_channels,
-                n_epochs=args.n_epochs,
-                show_processing_steps=True,
-                show_multi_epoch=True,
-                show_comparative_bands=True,
-                output_dir=subject_dir
-            )
 
     if args.analysis in ['tf', 'all']:
         print(f"\nRunning time-frequency analysis for {group_name}...")
