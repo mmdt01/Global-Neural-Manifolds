@@ -15,7 +15,8 @@ def compute_neural_manifold(region_epochs, region_channels_dict, band_name, n_co
                             plot=True, plot_title=None, output_dir=None):
     """
     This function computes the neural manifold for each subject's region by applying PCA to the band power data.
-    It uses the pre-computed band power data directly from the epochs objects.
+    It uses the pre-computed band power data directly from the epochs objects and mean-centers each channel
+    to focus on covariations rather than absolute activity levels.
     
     Parameters:
     -----------
@@ -59,6 +60,7 @@ def compute_neural_manifold(region_epochs, region_channels_dict, band_name, n_co
         try:
             # Number of channels for this subject
             num_channels = len(region_channels_dict[subject_id])
+            print(f"Total number of channels: {num_channels}")
             
             # Get the specific band's epochs object
             epochs = band_epochs[band_name]
@@ -68,9 +70,22 @@ def compute_neural_manifold(region_epochs, region_channels_dict, band_name, n_co
             
             # Get dimensions
             n_epochs, n_channels, n_times = band_power.shape
+
+            # Mean-center each channel across epochs and time: this removes baseline differences between channels and focuses on covariations
+            print(f"Mean-centering {n_channels} channels...")
+            band_power_centered = np.zeros_like(band_power)
+            
+            for ch_idx in range(n_channels):
+                # Compute mean activity for this channel across all epochs and time points
+                channel_mean = np.mean(band_power[:, ch_idx, :])
+                
+                # Subtract the mean from all data points for this channel
+                band_power_centered[:, ch_idx, :] = band_power[:, ch_idx, :] - channel_mean
+                
+                print(f"  Channel {ch_idx}: mean activity = {channel_mean:.4f}")
             
             # Reshape to 2D for PCA: (n_epochs*n_channels, n_times)
-            X = band_power.reshape(n_epochs * n_channels, n_times)
+            X = band_power_centered.reshape(n_epochs * n_channels, n_times)
             
             # Apply PCA
             pca = PCA(n_components=n_components)
@@ -80,7 +95,8 @@ def compute_neural_manifold(region_epochs, region_channels_dict, band_name, n_co
             manifold_dict[subject_id] = {
                 'manifold': components,
                 'explained_variance': pca.explained_variance_ratio_,
-                'pca': pca
+                'pca': pca,
+                'mean_centered_data': band_power_centered 
             }
             
             # Print explained variance
@@ -91,9 +107,9 @@ def compute_neural_manifold(region_epochs, region_channels_dict, band_name, n_co
             if plot and n_components == 3:
                 # Create a title
                 if plot_title is None:
-                    title = f"Subject {subject_id}: {band_name} Neural Manifold\n({num_channels} channels)"
+                    title = f"Subject {subject_id}: {band_name} Neural Manifold\n({num_channels} channels, mean-centered)"
                 else:
-                    title = f"{plot_title} - Subject {subject_id}: {band_name} band"
+                    title = f"{plot_title} - Subject {subject_id}: {band_name} band (mean-centered)"
                 
                 # Create 3D plot
                 fig = plt.figure(figsize=(10, 8))
