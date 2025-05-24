@@ -9,6 +9,8 @@ from .time_frequency import compute_time_frequency
 
 from .manifold import (
     compute_neural_manifold,
+    plot_neural_vaf,
+    create_gesture_comparison_summary,
     compute_gesture_manifolds,
     align_subject_manifolds_with_cca
 )
@@ -93,7 +95,7 @@ def perform_time_frequency_analysis(region_epochs, region_channels_dict, region_
     return tfr_power_dict
 
 def analyze_neural_manifolds(region_epochs, region_channels_dict, region_labels, 
-                           bands, n_components=3, output_dir=None):
+                           bands, n_components=3, output_dir=None, gesture_comparison=False):
     """
     Analyze neural manifolds for region-specific epoch data across multiple frequency bands.
     
@@ -109,15 +111,17 @@ def analyze_neural_manifolds(region_epochs, region_channels_dict, region_labels,
         List of frequency bands to analyze
     n_components : int, optional
         Number of PCA components to compute
-    downsample_factor : int, optional
-        Factor by which to downsample the data before PCA
     output_dir : str, optional
         Directory to save plots. If None, plots are displayed but not saved.
+    gesture_comparison : bool, optional
+        If True, applies PCA to individual gesture trials separately for comparison
         
     Returns:
     --------
     manifold_results : dict
         Dictionary mapping band names to manifold dictionaries
+        If gesture_comparison=False: {band_name: {subject_id: manifold_data}}
+        If gesture_comparison=True: {band_name: {gesture_name: {subject_id: manifold_data}}}
     """
     # Validate bands parameter
     if not bands:
@@ -125,6 +129,17 @@ def analyze_neural_manifolds(region_epochs, region_channels_dict, region_labels,
 
     # Initialize results dictionary
     manifold_results = {}
+    
+    # Create VAF output directory
+    if output_dir is not None:
+        vaf_output_dir = os.path.join(output_dir, "..", "vaf_plots")
+        ensure_dir(vaf_output_dir)
+        # Get the region/group name from output_dir path
+        region_name = os.path.basename(output_dir)
+        vaf_region_dir = os.path.join(vaf_output_dir, region_name)
+        ensure_dir(vaf_region_dir)
+    else:
+        vaf_region_dir = None
     
     # Analyze each frequency band
     for band_name in bands:
@@ -138,19 +153,136 @@ def analyze_neural_manifolds(region_epochs, region_channels_dict, region_labels,
             print(f"No subjects have data for band '{band_name}', skipping...")
             continue
         
-        # Compute neural manifolds
-        manifold_dict = compute_neural_manifold(
-            region_epochs,  # Pass the full nested dictionary
-            region_channels_dict,
-            band_name,
-            n_components=n_components,
-            plot=True,
-            plot_title=f"Regions: {', '.join(region_labels)}",
-            output_dir=output_dir
-        )
-        
-        # Save results
-        manifold_results[band_name] = manifold_dict
+        if not gesture_comparison:
+            # Original behavior: compute manifolds using all trials
+            print(f"Computing manifolds using all trials combined...")
+            
+            manifold_dict = compute_neural_manifold(
+                region_epochs,  # Pass the full nested dictionary
+                region_channels_dict,
+                band_name,
+                n_components=n_components,
+                plot=True,
+                plot_title=None,
+                output_dir=output_dir
+            )
+            
+            # Save results
+            manifold_results[band_name] = manifold_dict
+            
+            # Generate VAF plot for standard analysis
+            if len(manifold_dict) > 0:
+                print(f"Generating VAF plot for {band_name} band...")
+                plot_neural_vaf(
+                    manifold_dict,
+                    region_labels,
+                    band_name=band_name,
+                    output_dir=vaf_region_dir,
+                    max_components=n_components
+                )
+            
+        else:
+            # New behavior: compute manifolds for each gesture separately
+            print(f"Running gesture comparison analysis...")
+            
+            # Get list of gestures from the first subject's epochs
+            first_subject_id = subjects_with_band[0]
+            first_epochs = region_epochs[first_subject_id][band_name]
+            available_gestures = list(first_epochs.event_id.keys())
+            
+            print(f"Found gestures: {available_gestures}")
+            
+            # Initialize results for this band
+            manifold_results[band_name] = {}
+            
+            # Process each gesture
+            for gesture_name in available_gestures:
+                print(f"\n--- Processing gesture: {gesture_name} ---")
+                
+                # Create epochs dictionary for this gesture only
+                gesture_epochs = {}
+                gesture_trial_counts = {}
+                
+                for subject_id in subjects_with_band:
+                    if subject_id not in region_epochs or band_name not in region_epochs[subject_id]:
+                        continue
+                        
+                    full_epochs = region_epochs[subject_id][band_name]
+                    
+                    # Extract only this gesture's trials
+                    try:
+                        gesture_specific_epochs = full_epochs[gesture_name]
+                        
+                        # Skip if no trials for this gesture
+                        if len(gesture_specific_epochs) == 0:
+                            print(f"  No trials for gesture '{gesture_name}' in Subject {subject_id}")
+                            continue
+                            
+                        # Store in nested structure (maintaining original format)
+                        if subject_id not in gesture_epochs:
+                            gesture_epochs[subject_id] = {}
+                        gesture_epochs[subject_id][band_name] = gesture_specific_epochs
+                        gesture_trial_counts[subject_id] = len(gesture_specific_epochs)
+                        
+                        print(f"  Subject {subject_id}: {len(gesture_specific_epochs)} trials")
+                        
+                    except KeyError:
+                        print(f"  Gesture '{gesture_name}' not found in Subject {subject_id}")
+                        continue
+                
+                # Skip if no subjects have this gesture
+                if not gesture_epochs:
+                    print(f"  No subjects have trials for gesture '{gesture_name}', skipping...")
+                    continue
+                
+                print(f"  Total subjects with {gesture_name} trials: {len(gesture_epochs)}")
+                print(f"  Trial counts: {gesture_trial_counts}")
+                
+                # Create gesture-specific output directory
+                gesture_output_dir = None
+                if output_dir is not None:
+                    gesture_output_dir = os.path.join(output_dir, f"gesture_{gesture_name}")
+                    os.makedirs(gesture_output_dir, exist_ok=True)
+                
+                # Compute manifold for this gesture
+                print(f"  Computing spatial manifold for gesture '{gesture_name}'...")
+                gesture_manifold_dict = compute_neural_manifold(
+                    gesture_epochs,
+                    region_channels_dict,
+                    band_name,
+                    n_components=n_components,
+                    plot=True,
+                    plot_title=f"Gesture: {gesture_name.capitalize()}",
+                    output_dir=gesture_output_dir
+                )
+                
+                # Store results for this gesture
+                manifold_results[band_name][gesture_name] = gesture_manifold_dict
+                
+                # Generate VAF plot for this gesture
+                if len(gesture_manifold_dict) > 0:
+                    print(f"  Generating VAF plot for gesture '{gesture_name}'...")
+                    
+                    plot_neural_vaf(
+                        gesture_manifold_dict,
+                        region_labels,
+                        band_name=f"{band_name}_{gesture_name}",
+                        output_dir=gesture_output_dir,
+                        max_components=n_components
+                    )
+                
+                print(f"  Completed analysis for gesture '{gesture_name}'")
+            
+            # Create gesture comparison summary for this band
+            if len(manifold_results[band_name]) > 1:
+                print(f"\nCreating gesture comparison summary for {band_name} band...")
+                create_gesture_comparison_summary(
+                    manifold_results[band_name],
+                    band_name,
+                    region_labels,
+                    n_components,
+                    output_dir
+                ) 
     
     return manifold_results
 

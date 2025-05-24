@@ -91,6 +91,19 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        '--gesture-comparison',
+        action='store_true',
+        help='Run manifold analysis separately for each gesture class to compare spatial patterns across gestures'
+    )
+
+    parser.add_argument(
+        '--similarity-components',
+        type=int,
+        default=20,
+        help='Number of components to use for manifold similarity analysis (default: 20)'
+    )
+
+    parser.add_argument(
         '--high-dim-components',
         type=int,
         default=5,
