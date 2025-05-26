@@ -450,7 +450,8 @@ def plot_neural_vaf(manifold_results, region_labels, band_name, output_dir=None,
 
 def create_gesture_comparison_summary(gesture_results, band_name, region_labels, n_components, output_dir=None):
     """
-    Create summary visualizations comparing manifolds across gestures (inline version).
+    Create summary visualizations comparing manifolds across gestures (SIMPLIFIED VERSION).
+    This version only creates VAF plots, not principal angles (to avoid redundancy).
     """
     import matplotlib.pyplot as plt
     import numpy as np
@@ -464,9 +465,9 @@ def create_gesture_comparison_summary(gesture_results, band_name, region_labels,
         comparison_dir = None
     
     gestures = list(gesture_results.keys())
-    print(f"Creating comparison plots for gestures: {gestures}")
+    print(f"Creating VAF comparison plots for gestures: {gestures}")
     
-    # VAF Comparison Plot
+    # VAF Comparison Plot ONLY (no principal angles - those are computed elsewhere)
     plt.figure(figsize=(12, 6))
     
     # Colors for different gestures
@@ -511,7 +512,7 @@ def create_gesture_comparison_summary(gesture_results, band_name, region_labels,
     else:
         plt.show()
     
-    print(f"Gesture comparison summary completed for {band_name} band")
+    print(f"VAF comparison completed for {band_name} band (principal angles computed separately)")
 
 def plot_spatial_manifold(n_components, manifold_reshaped, spatial_patterns, channel_names, times, 
                          explained_variance, subject_id, band_name, plot_title=None, output_dir=None):

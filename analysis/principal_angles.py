@@ -51,26 +51,13 @@ def compute_principal_angles(manifold_A, manifold_B):
 def compute_pairwise_angles_subject(manifold_data, n_components=20):
     """
     Compute principal angles between all pairs of gestures for a single subject.
-    
-    Parameters:
-    -----------
-    manifold_data : dict
-        Dictionary mapping gesture names to manifold results for one subject
-        {gesture_name: {'spatial_patterns': array, ...}}
-    n_components : int
-        Number of components to use for angle computation
-        
-    Returns:
-    --------
-    pairwise_angles : dict
-        Dictionary with keys like 'gesture1_vs_gesture2' and values as angle arrays
-    gesture_pairs : list
-        List of gesture pair names
+    Returns both mean angles and component-wise angles.
     """
     gestures = list(manifold_data.keys())
     gesture_pairs = [f"{g1}_vs_{g2}" for g1, g2 in combinations(gestures, 2)]
     
     pairwise_angles = {}
+    pairwise_angles_componentwise = {}  # NEW: Store all component angles
     
     for g1, g2 in combinations(gestures, 2):
         pair_key = f"{g1}_vs_{g2}"
@@ -82,7 +69,8 @@ def compute_pairwise_angles_subject(manifold_data, n_components=20):
         # Compute principal angles
         angles, _ = compute_principal_angles(patterns_A, patterns_B)
         
-        pairwise_angles[pair_key] = angles
+        pairwise_angles[pair_key] = angles  # Store ALL component angles
+        pairwise_angles_componentwise[pair_key] = angles  # For clarity
         
         print(f"  {pair_key}: Mean angle = {np.mean(angles):.3f} rad ({np.degrees(np.mean(angles)):.1f}°)")
     

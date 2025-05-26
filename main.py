@@ -104,6 +104,33 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        '--tme-analysis',
+        action='store_true',
+        help='Run TME null hypothesis testing for manifold similarity'
+    )
+    
+    parser.add_argument(
+        '--matlab-tme-path',
+        type=str,
+        default='./tme_toolbox',
+        help='Path to TME MATLAB toolbox directory'
+    )
+    
+    parser.add_argument(
+        '--tme-surrogates',
+        type=int,
+        default=1000,
+        help='Number of TME surrogate tensors to generate (default: 1000)'
+    )
+    
+    parser.add_argument(
+        '--tme-components',
+        type=int,
+        default=20,
+        help='Number of components for TME manifold analysis (default: 20)'
+    )
+
+    parser.add_argument(
         '--high-dim-components',
         type=int,
         default=5,
