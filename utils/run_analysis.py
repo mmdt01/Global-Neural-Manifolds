@@ -24,12 +24,13 @@ from analysis import (
 )
 from visualization import (
     plot_tf_summary,
-    plot_manifold_comparison,
     visualize_canonical_correlations,
     visualize_mode_correlations,
     visualize_cross_region_correlations,
     visualize_gesture_tsne
 )
+# Import the principal angles functions
+from analysis.tme_manifold_integration import run_enhanced_tme_analysis
 
 def run_region_analyses(args, region_epochs, region_channels_dict, region_labels, group_name,
                         subject_id_list, event_dict_gest, mapping_events, frequency_bands,
@@ -417,37 +418,87 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
             baseline=(-0.5, 0.0),
             output_dir=group_tf_dir
         )
-    
+        
     if args.analysis in ['manifold', 'all']:
         print(f"\nAnalyzing neural manifolds for {group_name}...")
         print(f"Using frequency bands: {frequency_bands}")
         output_dir = None if args.plot else group_manifold_dir
 
-        manifold_results = analyze_neural_manifolds(
-            region_epochs,
-            region_channels_dict,
-            region_labels,
-            bands=frequency_bands,  # Pass all frequency bands
-            n_components=3,
-            output_dir=output_dir
-        )
+        # Check if gesture comparison is requested
+        gesture_comparison = getattr(args, 'gesture_comparison', False)
         
-        # Generate comparison visualizations for each band
-        for band_name in manifold_results:
-            if len(manifold_results[band_name]) > 0:
-                # Get times from first subject's epochs for this specific band
-                first_subject = next(iter(manifold_results[band_name].keys()))
-                if first_subject in region_epochs and band_name in region_epochs[first_subject]:
-                    times = region_epochs[first_subject][band_name].times
-                    
-                    # Plot comparison of subjects for this band
-                    plot_manifold_comparison(
-                        manifold_results[band_name], 
-                        band_name, 
-                        times, 
-                        region_labels,
-                        output_dir=group_manifold_dir
-                    )
+        if gesture_comparison or getattr(args, 'tme_analysis', False):
+            # Force gesture comparison if TME is requested
+            args.gesture_comparison = True
+            print("Running gesture comparison manifold analysis...")
+
+            # STEP 1: Compute gesture manifolds (with VAF plots only)
+            manifold_results = analyze_neural_manifolds(
+                region_epochs,
+                region_channels_dict,
+                region_labels,
+                bands=frequency_bands,
+                n_components=50,
+                output_dir=output_dir,
+                gesture_comparison=True
+            )
+            
+            # STEP 2: Compute principal angles ONCE
+            print(f"\n{'='*60}")
+            print("COMPUTING PRINCIPAL ANGLES (ONCE)")
+            print(f"{'='*60}")
+            
+            from analysis.principal_angles import run_manifold_similarity_analysis
+            
+            n_similarity_components = getattr(args, 'similarity_components', 20)
+            print(f"Using {n_similarity_components} components for similarity analysis")
+            
+            similarity_results = run_manifold_similarity_analysis(
+                manifold_results,
+                frequency_bands,
+                n_components=n_similarity_components,
+                output_dir=output_dir
+            )
+            
+            print("Principal angles computed and visualized!")
+            
+            # STEP 3: Enhanced TME analysis (reuse computed angles + component-wise null)
+            if getattr(args, 'tme_analysis', False):
+                print(f"\n Running Enhanced TME analysis with component-wise null...")
+                
+                # Create TME output directory
+                tme_dir = os.path.join(args.output_dir, 'tme_analysis', group_name)
+                ensure_dir(tme_dir)
+                
+                # Run enhanced TME analysis 
+                enhanced_tme_results = run_enhanced_tme_analysis(
+                    region_epochs=region_epochs,
+                    region_channels_dict=region_channels_dict,
+                    similarity_results=similarity_results,
+                    args=args,
+                    frequency_bands=frequency_bands,
+                    output_dir=tme_dir
+                )
+                
+                print("Enhanced TME analysis with component-wise visualization completed!")
+            
+        else:
+            # Standard manifold analysis (all trials combined)
+            print("Running standard manifold analysis (all trials combined)...")
+            
+            manifold_results = analyze_neural_manifolds(
+                region_epochs,
+                region_channels_dict,
+                region_labels,
+                bands=frequency_bands,
+                n_components=50,
+                output_dir=output_dir,
+                gesture_comparison=False
+            )
+            
+            print("Standard manifold analysis completed!")
+        
+        print(f"Manifold analysis completed for {group_name}")
     
     if args.analysis in ['gesture-manifolds', 'all']:
         print(f"\nAnalyzing gesture-specific neural manifolds for {group_name}...")

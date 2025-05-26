@@ -19,6 +19,9 @@ region_groups = {
     # superior parietal regions
     "superiorparietal-rh": ["ctx-rh-superiorparietal", "wm-rh-superiorparietal"],
     "superiorparietal-lh": ["ctx-lh-superiorparietal", "wm-lh-superiorparietal"],
+    # inferior parietal regions
+    "inferiorparietal-rh": ["ctx-rh-inferiorparietal", "wm-rh-inferiorparietal"],
+    "inferiorparietal-lh": ["ctx-lh-inferiorparietal", "wm-lh-inferiorparietal"],
     # supramarginal regions
     "supramarginal-rh": ["ctx-rh-supramarginal", "wm-rh-supramarginal"],
     "supramarginal-lh": ["ctx-lh-supramarginal", "wm-lh-supramarginal"],
@@ -31,6 +34,9 @@ region_groups = {
     # superior frontal regions
     "superiorfrontal-rh": ["ctx-rh-superiorfrontal", "wm-rh-superiorfrontal"],
     "superiorfrontal-lh": ["ctx-lh-superiorfrontal", "wm-lh-superiorfrontal"],
+    # pars triangularis regions
+    "parstriangularis-rh": ["ctx-rh-parstriangularis", "wm-rh-parstriangularis"],
+    "parstriangularis-lh": ["ctx-lh-parstriangularis", "wm-lh-parstriangularis"],
     # pars opercularis regions
     "parsopercularis-rh": ["ctx-rh-parsopercularis", "wm-rh-parsopercularis"],
     "parsopercularis-lh": ["ctx-lh-parsopercularis", "wm-lh-parsopercularis"],
@@ -40,6 +46,9 @@ region_groups = {
     # insula regions
     "insula-rh": ["ctx-rh-insula", "wm-rh-insula"],
     "insula-lh": ["ctx-lh-insula", "wm-lh-insula"],
+    # posterior cingulate regions
+    "posteriorcingulate-rh": ["ctx-rh-posteriorcingulate", "wm-rh-posteriorcingulate"],
+    "posteriorcingulate-lh": ["ctx-lh-posteriorcingulate", "wm-lh-posteriorcingulate"],
     # superior temporal regions
     "superiortemporal-rh": ["ctx-rh-superiortemporal", "wm-rh-superiortemporal"],
     "superiortemporal-lh": ["ctx-lh-superiortemporal", "wm-lh-superiortemporal"],
