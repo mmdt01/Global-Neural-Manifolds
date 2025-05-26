@@ -336,3 +336,6 @@ analysis/__pycache__/mean_activity.cpython-39.pyc
 data_loading/__pycache__/region_caching.cpython-39.pyc
 utils/__pycache__/run_analysis.cpython-39.pyc
 visualization/__pycache__/tsne_gesture_visualization.cpython-39.pyc
+analysis/__pycache__/principal_angles.cpython-39.pyc
+analysis/__pycache__/tme_bridge.cpython-39.pyc
+analysis/__pycache__/tme_manifold_integration.cpython-39.pyc
