@@ -23,8 +23,10 @@ from analysis import (
     analyze_gesture_classification,
     cross_region_lfo_classification_analysis,
     compute_cross_gesture_vaf_analysis,
-    visualize_cross_vaf_results
+    visualize_cross_vaf_results,
+    save_spatial_loadings
 )
+
 from visualization import (
     plot_tf_summary,
     visualize_canonical_correlations,
@@ -427,6 +429,10 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
         print(f"Using frequency bands: {frequency_bands}")
         output_dir = None if args.plot else group_manifold_dir
 
+        # Create spatial loadings output directory
+        spatial_loadings_dir = os.path.join(args.output_dir, 'spatial_loadings', group_name)
+        ensure_dir(spatial_loadings_dir)
+
         # Check if gesture comparison is requested
         gesture_comparison = getattr(args, 'gesture_comparison', False)
         
@@ -447,6 +453,42 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
                 output_dir=output_dir,
                 gesture_comparison=True
             )
+
+            # STEP 2: Save gesture-specific spatial loadings for each band
+            print("Saving gesture-specific spatial loadings...")
+            
+            for band_name in frequency_bands:
+                if band_name in manifold_results:
+                    print(f"  Saving spatial loadings for {band_name} band...")
+                    
+                    # Create band-specific directory
+                    band_spatial_dir = os.path.join(spatial_loadings_dir, f"{band_name}_band")
+                    ensure_dir(band_spatial_dir)
+                    
+                    # Get gesture data for this band
+                    band_gesture_data = manifold_results[band_name]
+                    
+                    # Save spatial loadings for each gesture separately
+                    for gesture_name, gesture_subject_data in band_gesture_data.items():
+                        print(f"    Processing gesture: {gesture_name}")
+                        
+                        # Create gesture-specific directory
+                        gesture_spatial_dir = os.path.join(band_spatial_dir, f"gesture_{gesture_name}")
+                        ensure_dir(gesture_spatial_dir)
+                        
+                        # Save spatial loadings for this gesture
+                        saved_files = save_spatial_loadings(
+                            manifold_dict=gesture_subject_data,  # {subject_id: manifold_data}
+                            region_channels_dict=region_channels_dict,
+                            band_name=f"{band_name}_{gesture_name}",
+                            n_modes=3,  # First 3 neural modes
+                            output_dir=gesture_spatial_dir
+                        )
+                        print(f"      Saved {len(saved_files)} files for {gesture_name}")
+                    
+                    print(f"    Spatial loadings for {band_name} saved to: {band_spatial_dir}")
+            
+            print(f"All gesture-specific spatial loadings saved to: {spatial_loadings_dir}")
             
             # STEP 2: Compute principal angles ONCE
             print(f"\n{'='*60}")
