@@ -124,16 +124,15 @@ def parse_arguments():
     )
     
     parser.add_argument(
-        '--tme-components',
-        type=int,
-        default=20,
-        help='Number of components for TME manifold analysis (default: 20)'
+        '--cross-vaf-verification',
+        action='store_true',
+        help='Run cross-gesture VAF verification analysis to test shared neural structure'
     )
 
     parser.add_argument(
-        '--high-dim-components',
+        '--pca-components',
         type=int,
-        default=5,
+        default=12,
         help='Number of components to use for high-dimensional manifold analysis'
     )
 
