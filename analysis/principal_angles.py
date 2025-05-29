@@ -244,7 +244,7 @@ def create_similarity_visualizations(aggregated_results, band_name, n_components
     print(f"  Range: {np.min(all_angles):.1f}° to {np.max(all_angles):.1f}°")
     print(f"  Number of gesture pairs: {len(all_angles)}")
 
-def analyze_gesture_manifold_similarity(manifold_results, band_name, n_components=20, output_dir=None):
+def analyze_gesture_manifold_similarity(manifold_results, band_name, n_components, output_dir=None):
     """
     Analyze manifold similarity across all subjects for a specific frequency band.
     
@@ -333,7 +333,7 @@ def analyze_gesture_manifold_similarity(manifold_results, band_name, n_component
     return results
 
 # Main function to add to your analysis pipeline
-def run_manifold_similarity_analysis(manifold_results, frequency_bands, n_components=20, output_dir=None):
+def run_manifold_similarity_analysis(manifold_results, frequency_bands, n_components, output_dir=None):
     """
     Run manifold similarity analysis for all frequency bands.
     
