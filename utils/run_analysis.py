@@ -3,6 +3,7 @@ Run full analyses on region-specific or brain-wide data.
 """
 
 import os
+import pickle
 import numpy as np
 from scipy.stats import sem
 from utils.helpers import ensure_dir
@@ -20,7 +21,9 @@ from analysis import (
     analyze_mean_delta_activity,
     compute_gesture_mean_activity,
     analyze_gesture_classification,
-    cross_region_lfo_classification_analysis
+    cross_region_lfo_classification_analysis,
+    compute_cross_gesture_vaf_analysis,
+    visualize_cross_vaf_results
 )
 from visualization import (
     plot_tf_summary,
@@ -432,13 +435,15 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
             args.gesture_comparison = True
             print("Running gesture comparison manifold analysis...")
 
+            pca_components = getattr(args, 'pca_components', 12)
+
             # STEP 1: Compute gesture manifolds (with VAF plots only)
             manifold_results = analyze_neural_manifolds(
                 region_epochs,
                 region_channels_dict,
                 region_labels,
                 bands=frequency_bands,
-                n_components=50,
+                n_components=pca_components,
                 output_dir=output_dir,
                 gesture_comparison=True
             )
@@ -481,6 +486,88 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
                 )
                 
                 print("Enhanced TME analysis with component-wise visualization completed!")
+            
+            # STEP 4: Cross-VAF Verification Analysis
+            if getattr(args, 'cross_vaf_verification', False):
+                print(f"\n Running Cross-Gesture VAF Verification Analysis...")
+                
+                # Create cross-VAF output directory
+                cross_vaf_dir = os.path.join(args.output_dir, 'cross_vaf_analysis', group_name)
+                ensure_dir(cross_vaf_dir)
+                
+                # Run cross-VAF analysis for each subject
+                cross_vaf_results = {}
+                
+                for subject_id in region_epochs.keys():
+                    for band_name in frequency_bands:
+                        if band_name in manifold_results:
+                            print(f"\nAnalyzing Subject {subject_id}, {band_name} band...")
+                            
+                            # Run cross-VAF analysis
+                            results = compute_cross_gesture_vaf_analysis(
+                                manifold_results=manifold_results,
+                                region_epochs=region_epochs,
+                                subject_id=subject_id,
+                                band_name=band_name,
+                                n_controls=50  # Start with 50 controls for speed
+                            )
+                            
+                            if results is not None:
+                                # Store results
+                                if band_name not in cross_vaf_results:
+                                    cross_vaf_results[band_name] = {}
+                                cross_vaf_results[band_name][subject_id] = results
+                                
+                                # Create visualization
+                                visualize_cross_vaf_results(results, output_dir=cross_vaf_dir)
+                                
+                                # Save results
+                                results_file = os.path.join(cross_vaf_dir, 
+                                                          f'cross_vaf_results_subject_{subject_id}_{band_name}.pkl')
+                                with open(results_file, 'wb') as f:
+                                    pickle.dump(results, f)
+                
+                # Print summary across all subjects
+                print(f"\n===== CROSS-VAF VERIFICATION SUMMARY =====")
+                for band_name, band_results in cross_vaf_results.items():
+                    print(f"\n{band_name.upper()} Band Results:")
+                    
+                    all_observed = []
+                    all_control = []
+                    all_effect_sizes = []
+                    
+                    for subject_id, results in band_results.items():
+                        stats = results['statistics']
+                        all_observed.extend(results['observed_ratios'])
+                        all_control.extend(results['control_ratios'])
+                        all_effect_sizes.append(stats['effect_size'])
+                        
+                        print(f"  Subject {subject_id}: "
+                              f"Mean ratio = {stats['mean_observed']:.3f}, "
+                              f"Effect size = {stats['effect_size']:.2f}, "
+                              f"p = {stats['p_value']:.2e}")
+                    
+                    # Overall statistics
+                    if all_observed:
+                        from scipy.stats import ttest_ind
+                        overall_t, overall_p = ttest_ind(all_observed, all_control)
+                        overall_effect = (np.mean(all_observed) - np.mean(all_control)) / np.std(all_control)
+                        
+                        print(f"\n  OVERALL {band_name.upper()} SUMMARY:")
+                        print(f"    Cross-gesture ratio: {np.mean(all_observed):.3f} ± {np.std(all_observed):.3f}")
+                        print(f"    Control ratio: {np.mean(all_control):.3f} ± {np.std(all_control):.3f}")
+                        print(f"    Effect size: {overall_effect:.2f}")
+                        print(f"    P-value: {overall_p:.2e}")
+                        
+                        if np.mean(all_observed) > 0.8:
+                            print(f"    STRONG EVIDENCE for shared neural structure!")
+                        elif np.mean(all_observed) > 0.6:
+                            print(f"    MODERATE EVIDENCE for shared neural structure")
+                        else:
+                            print(f"    WEAK EVIDENCE for shared neural structure")
+                
+                print(f"\nCross-VAF verification analysis completed!")
+                print(f"Results saved to: {cross_vaf_dir}")
             
         else:
             # Standard manifold analysis (all trials combined)
