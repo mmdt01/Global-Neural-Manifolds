@@ -826,6 +826,21 @@ def plot_spatial_manifold(n_components, manifold_reshaped, spatial_patterns, cha
     else:
         plt.show()
 
+def extract_region_from_channel(channel_name):
+    """Extract region from channel name like 'seeg-117_caudalmiddlefrontal_rh'"""
+    try:
+        # Split by underscores and get the region part (second element after 'seeg-X')
+        parts = channel_name.split('_')
+        if len(parts) >= 2:
+            # Remove the 'seeg-X' part and get the region
+            region = parts[1]
+            return region
+        else:
+            return 'unknown'
+    except:
+        return 'unknown'
+
+
 # functions for analysing manifolds of different gestures independently
 
 def compute_gesture_manifolds(region_epochs, region_channels_dict, band_name, gestures, 
