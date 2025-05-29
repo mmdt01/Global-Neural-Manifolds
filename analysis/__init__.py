@@ -37,6 +37,10 @@ from .lfo_classification import (
     visualize_multiclass_classification,
     analyze_cross_region_classification
 )
+from .cross_vaf_analysis import (
+    compute_cross_gesture_vaf_analysis,
+    visualize_cross_vaf_results
+)
 
 def perform_time_frequency_analysis(region_epochs, region_channels_dict, region_labels,
                                   tmin=None, tmax=None, output_dir=None):
