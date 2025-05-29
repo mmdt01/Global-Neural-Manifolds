@@ -327,7 +327,7 @@ def compute_neural_manifold(region_epochs, region_channels_dict, band_name, n_co
             print(f"Total explained variance: {sum(pca.explained_variance_ratio_):.3f}")
             
             # Plot if requested and if 3 components equal to or less than 6
-            if plot and n_components <= 6:
+            if plot:
                 plot_spatial_manifold(
                     n_components,
                     manifold_reshaped, 
@@ -411,10 +411,40 @@ def plot_neural_vaf(manifold_results, region_labels, band_name, output_dir=None,
     mean_cumulative = np.mean(all_cumulative_variance[:, :n_components], axis=0)
     # sem_cumulative = sem(all_cumulative_variance[:, :n_components], axis=0)
     
-    # # Plot mean with error bars
-    # ax.errorbar(component_numbers, mean_cumulative, yerr=sem_cumulative,
-    #            color='#c0392b', linewidth=2, markersize=6,
-    #            capsize=3, capthick=2, label=f'Mean ± SEM (n={len(subject_ids)})')
+    # Plot mean
+    ax.plot(component_numbers, mean_cumulative, color='#c0392b', linewidth=2, 
+           markersize=6, marker='o', label=f'Mean (n={len(subject_ids)})')
+    
+    # Find the component where ALL subjects reach 75% VAF
+    min_cumulative_per_component = np.min(all_cumulative_variance[:, :n_components], axis=0)
+    
+    # Find first component where minimum across subjects >= 75%
+    vaf_threshold = 75.0
+    components_above_threshold = np.where(min_cumulative_per_component >= vaf_threshold)[0]
+    
+    if len(components_above_threshold) > 0:
+        # Component number where all subjects reach 75% (1-indexed)
+        min_components_for_75_vaf = components_above_threshold[0] + 1
+        
+        # Add horizontal red dotted line at 75%
+        ax.axhline(y=vaf_threshold, color='red', linestyle=':', linewidth=2, 
+                  alpha=0.8, label=f'{vaf_threshold}% VAF threshold')
+        
+        # Add vertical blue dotted line at the required component number
+        ax.axvline(x=min_components_for_75_vaf, color='blue', linestyle=':', linewidth=2,
+                  alpha=0.8, label=f'{min_components_for_75_vaf} components needed')
+        
+        print(f"75% VAF threshold analysis for {band_name} band:")
+        print(f"  Minimum components needed for ALL subjects to reach 75% VAF: {min_components_for_75_vaf}")
+        print(f"  Actual minimum VAF at component {min_components_for_75_vaf}: {min_cumulative_per_component[min_components_for_75_vaf-1]:.1f}%")
+        
+    else:
+        print(f"Warning: 75% VAF threshold not reached by all subjects within {n_components} components")
+        print(f"  Maximum minimum VAF achieved: {np.max(min_cumulative_per_component):.1f}%")
+        
+        # Still add the horizontal reference line
+        ax.axhline(y=vaf_threshold, color='red', linestyle=':', linewidth=2, 
+                  alpha=0.8, label=f'{vaf_threshold}% VAF threshold (not reached)')
     
     # Formatting
     ax.set_xlabel('Principal Component')
@@ -431,7 +461,15 @@ def plot_neural_vaf(manifold_results, region_labels, band_name, output_dir=None,
     
     # Add text annotations for key statistics
     total_var_first_3 = mean_cumulative[min(2, n_components-1)]
-    ax.text(0.02, 0.98, f'First 3 PCs: {total_var_first_3:.1f}% VAF', 
+    
+    # Create info text box
+    info_text = f'First 3 PCs: {total_var_first_3:.1f}% VAF'
+    
+    # Add 75% threshold info if available
+    if len(components_above_threshold) > 0:
+        info_text += f'\n{vaf_threshold}% threshold: {min_components_for_75_vaf} PCs'
+    
+    ax.text(0.02, 0.98, info_text, 
            transform=ax.transAxes, verticalalignment='top',
            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
@@ -467,11 +505,17 @@ def create_gesture_comparison_summary(gesture_results, band_name, region_labels,
     gestures = list(gesture_results.keys())
     print(f"Creating VAF comparison plots for gestures: {gestures}")
     
-    # VAF Comparison Plot ONLY (no principal angles - those are computed elsewhere)
+    # VAF Comparison Plot with 75% threshold reference
     plt.figure(figsize=(12, 6))
     
     # Colors for different gestures
     colors = plt.cm.Set1(np.linspace(0, 1, len(gestures)))
+    
+    # ===== Track components needed for 75% VAF =====
+    vaf_threshold = 75.0
+    gesture_components_needed = {}
+    max_components_needed = 0
+    worst_gesture = None
     
     for i, (gesture_name, manifold_data) in enumerate(gesture_results.items()):
         if not manifold_data:  # Skip if no data
@@ -493,10 +537,40 @@ def create_gesture_comparison_summary(gesture_results, band_name, region_labels,
         mean_cumulative = np.mean(all_explained_variance[:, :len(component_numbers)], axis=0)
         sem_cumulative = sem(all_explained_variance[:, :len(component_numbers)], axis=0)
         
+        # ===== Find components needed for 75% VAF =====
+        # Find minimum VAF across all subjects for each component
+        min_cumulative_per_component = np.min(all_explained_variance[:, :len(component_numbers)], axis=0)
+        
+        # Find first component where ALL subjects reach 75% VAF
+        components_above_threshold = np.where(min_cumulative_per_component >= vaf_threshold)[0]
+        
+        if len(components_above_threshold) > 0:
+            components_needed = components_above_threshold[0] + 1  # 1-indexed
+            gesture_components_needed[gesture_name] = components_needed
+            
+            if components_needed > max_components_needed:
+                max_components_needed = components_needed
+                worst_gesture = gesture_name
+                
+            print(f"  {gesture_name}: {components_needed} components needed for 75% VAF (min: {min_cumulative_per_component[components_needed-1]:.1f}%)")
+        else:
+            print(f"  {gesture_name}: 75% VAF not reached within {len(component_numbers)} components (max: {np.max(min_cumulative_per_component):.1f}%)")
+        
         # Plot with error bars
         plt.errorbar(component_numbers, mean_cumulative, yerr=sem_cumulative,
                     label=f'{gesture_name.capitalize()} (n={len(all_explained_variance)})',
                     color=colors[i], linewidth=2, marker='o', capsize=3)
+    
+    # ===== Add visual reference line for worst case =====
+    if max_components_needed > 0:
+        plt.axvline(x=max_components_needed, color='red', linestyle='--', linewidth=2, 
+                   alpha=0.8, label=f'{max_components_needed} PCs (worst case: {worst_gesture})')
+        
+        print(f"\n75% VAF Analysis Summary:")
+        print(f"  Gesture requiring most components: {worst_gesture} ({max_components_needed} components)")
+        print(f"  All gestures reach 75% VAF by component {max_components_needed}")
+    else:
+        print(f"\nWarning: No gestures reached 75% VAF threshold within {n_components} components")
     
     plt.xlabel('Principal Component')
     plt.ylabel('Cumulative VAF (%)')
@@ -504,6 +578,20 @@ def create_gesture_comparison_summary(gesture_results, band_name, region_labels,
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.ylim(0, 105)
+    
+    # Add horizontal reference line at 75%
+    plt.axhline(y=vaf_threshold, color='gray', linestyle=':', linewidth=1, 
+               alpha=0.6, label=f'{vaf_threshold}% threshold')
+    
+    # Update legend to include new elements
+    plt.legend()
+    
+    # Add info text box
+    if max_components_needed > 0:
+        info_text = f'75% VAF threshold\nWorst case: {worst_gesture}\n{max_components_needed} components needed'
+        plt.text(0.02, 0.98, info_text, transform=plt.gca().transAxes, 
+                verticalalignment='top', fontsize=9,
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
     if comparison_dir is not None:
         plt.savefig(f"{comparison_dir}/gesture_vaf_comparison_{band_name}.png", 
@@ -513,13 +601,15 @@ def create_gesture_comparison_summary(gesture_results, band_name, region_labels,
         plt.show()
     
     print(f"VAF comparison completed for {band_name} band (principal angles computed separately)")
+    
+    return gesture_components_needed  # Return the analysis results
 
 def plot_spatial_manifold(n_components, manifold_reshaped, spatial_patterns, channel_names, times, 
                          explained_variance, subject_id, band_name, plot_title=None, output_dir=None):
     """
     Plot spatial manifold results in two separate figures:
     1. 3D trajectory through spatial modes (if n_components >= 3)
-    2. Spatial patterns (loadings) for ALL components
+    2. Spatial patterns (loadings) for first 6 components (maximum)
     
     Parameters:
     -----------
@@ -601,7 +691,7 @@ def plot_spatial_manifold(n_components, manifold_reshaped, spatial_patterns, cha
         else:
             plt.show()
     
-    # ===== FIGURE 2: Spatial Patterns (Bar Plots) for ALL Components =====
+    # ===== FIGURE 2: Spatial Patterns (Bar Plots) for First 6 Components Maximum =====
     
     # Extract brain regions from channel names
     def extract_region_from_channel(channel_name):
@@ -635,32 +725,20 @@ def plot_spatial_manifold(n_components, manifold_reshaped, spatial_patterns, cha
     for i, region in enumerate(unique_regions):
         region_colors[region] = cmap_regions(i / max(len(unique_regions) - 1, 1))
     
-    # Determine subplot layout based on number of components
-    n_components_to_plot = spatial_patterns.shape[1]
+    # Determine subplot layout based on number of components (max 6)
+    n_components_to_plot = min(spatial_patterns.shape[1], 6)
+    
+    print(f"Plotting first {n_components_to_plot} spatial components (out of {spatial_patterns.shape[1]} total)")
     
     # Calculate optimal subplot arrangement
     if n_components_to_plot <= 3:
         n_rows, n_cols = 1, n_components_to_plot
         fig_width = 5 * n_components_to_plot
         fig_height = 5
-    elif n_components_to_plot <= 6:
+    else:  # 4, 5, or 6 components
         n_rows, n_cols = 2, 3
         fig_width = 15
         fig_height = 8
-    elif n_components_to_plot <= 9:
-        n_rows, n_cols = 3, 3
-        fig_width = 15
-        fig_height = 12
-    elif n_components_to_plot <= 12:
-        n_rows, n_cols = 3, 4
-        fig_width = 20
-        fig_height = 12
-    else:
-        # For more than 12 components, use 4 columns
-        n_cols = 4
-        n_rows = int(np.ceil(n_components_to_plot / n_cols))
-        fig_width = 20
-        fig_height = 4 * n_rows
     
     print(f"Creating subplot layout: {n_rows} rows × {n_cols} columns for {n_components_to_plot} components")
     
@@ -728,9 +806,9 @@ def plot_spatial_manifold(n_components, manifold_reshaped, spatial_patterns, cha
                title_fontsize=9, columnspacing=1.2)
     
     if plot_title is None:
-        suptitle = "" # f"Subject {subject_id}: {band_name} Spatial Patterns (All {n_components_to_plot} Components)"
+        suptitle = f"Subject {subject_id}: {band_name} Spatial Patterns (First {n_components_to_plot} Components)"
     else:
-        suptitle = f"{plot_title} - Subject {subject_id}: {band_name} Spatial Patterns (All {n_components_to_plot} Components)"
+        suptitle = f"{plot_title} - Subject {subject_id}: {band_name} Spatial Patterns (First {n_components_to_plot} Components)"
     fig2.suptitle(suptitle, fontsize=12, fontweight='bold', y=0.95)
     
     # Adjust layout based on number of rows
