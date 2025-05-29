@@ -99,7 +99,7 @@ def parse_arguments():
     parser.add_argument(
         '--similarity-components',
         type=int,
-        default=20,
+        default=12,
         help='Number of components to use for manifold similarity analysis (default: 20)'
     )
 
