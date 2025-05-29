@@ -540,9 +540,13 @@ def run_enhanced_tme_analysis(region_epochs, region_channels_dict, similarity_re
                             args, frequency_bands, output_dir):
     """
     Enhanced TME analysis that computes component-wise null angles for visualization.
-    
-    This replaces the previous streamlined TME function to provide component-wise nulls.
     """
+    # ================================================
+    print("🧪 VERIFYING NULL ANGLE GENERATION...")
+    verify_null_generation(n_channels=100, n_components=20, n_surrogates=100)  # Small test first
+    print("🧪 VERIFICATION COMPLETE\n")
+    # ================================================
+
     from analysis.tme_bridge import run_tme_analysis
     from analysis.principal_angles import compute_principal_angles
     
@@ -578,6 +582,16 @@ def run_enhanced_tme_analysis(region_epochs, region_channels_dict, similarity_re
                 observed_angles = band_similarity['subject_angles'][subject_id]
                 gesture_pairs = list(observed_angles.keys())
                 
+                # Determine actual number of components from observed data
+                first_pair = gesture_pairs[0]
+                actual_n_components = len(observed_angles[first_pair])
+                
+                print(f"  Observed data has {actual_n_components} components")
+                print(f"  Using {actual_n_components} components for TME analysis (overriding --tme-components)")
+                
+                # Use actual number of components instead of args.tme_components
+                n_components = actual_n_components
+
                 print(f"  Using pre-computed observed angles for {len(gesture_pairs)} gesture pairs")
                 
                 # Generate TME surrogate data
@@ -593,10 +607,9 @@ def run_enhanced_tme_analysis(region_epochs, region_channels_dict, similarity_re
                 )
                 
                 # Generate COMPONENT-WISE null distribution
-                print("  Computing component-wise null distribution...")
+                print(f"  Computing component-wise null distribution with {n_components} components...")
                 
                 n_channels = len(region_channels_dict[subject_id])
-                n_components = args.tme_components
                 
                 # Store component-wise null angles for each gesture pair
                 component_wise_null_angles = {pair: [] for pair in gesture_pairs}
@@ -686,6 +699,163 @@ def run_enhanced_tme_analysis(region_epochs, region_channels_dict, similarity_re
     print("Enhanced TME analysis completed!")
     return enhanced_results
 
+### debugging files
+
+def debug_tme_intersection(test_results):
+    """Debug why TME intersection always occurs at final component"""
+    
+    print("\n" + "="*60)
+    print("DEBUGGING TME INTERSECTION ISSUE")
+    print("="*60)
+    
+    n_components = test_results['n_components']
+    gesture_pairs = test_results['gesture_pairs']
+    
+    print(f"Number of components: {n_components}")
+    print(f"Gesture pairs: {gesture_pairs}")
+    
+    # 1. Examine raw observed angles for each pair
+    print("\n1. RAW OBSERVED ANGLES BY COMPONENT:")
+    for pair in gesture_pairs:
+        obs_angles = test_results['observed_angles'][pair]
+        angles_deg = [f"{np.degrees(a):.1f}°" for a in obs_angles]
+        print(f"   {pair}: {angles_deg}")
+        
+        # Check for monotonic patterns
+        diffs = np.diff(obs_angles)
+        if np.all(diffs >= 0):
+            print(f"   → MONOTONIC INCREASING ⚠️")
+        elif np.all(diffs <= 0):
+            print(f"   → MONOTONIC DECREASING ⚠️")
+        else:
+            print(f"   → Mixed pattern ✓")
+    
+    # 2. Examine raw null angles for each pair
+    print("\n2. RAW NULL ANGLES BY COMPONENT:")
+    for pair in gesture_pairs:
+        null_means = test_results['component_wise_null_stats'][pair]['null_mean_per_component']
+        angles_deg = [f"{np.degrees(a):.1f}°" for a in null_means]
+        print(f"   {pair}: {angles_deg}")
+        
+        # Check for monotonic patterns
+        diffs = np.diff(null_means)
+        if np.all(diffs >= 0):
+            print(f"   → MONOTONIC INCREASING ⚠️")
+        elif np.all(diffs <= 0):
+            print(f"   → MONOTONIC DECREASING ⚠️")
+        else:
+            print(f"   → Mixed pattern ✓")
+    
+    # 3. Compute average patterns
+    print("\n3. AVERAGE PATTERNS ACROSS PAIRS:")
+    
+    # Average observed angles by component
+    avg_obs_by_comp = []
+    avg_null_by_comp = []
+    
+    for comp_idx in range(n_components):
+        obs_vals = [test_results['observed_angles'][pair][comp_idx] for pair in gesture_pairs]
+        null_vals = [test_results['component_wise_null_stats'][pair]['null_mean_per_component'][comp_idx] 
+                    for pair in gesture_pairs]
+        
+        avg_obs_by_comp.append(np.mean(obs_vals))
+        avg_null_by_comp.append(np.mean(null_vals))
+    
+    print("Component | Observed | Null    | Difference")
+    print("-" * 45)
+    for i, (obs, null) in enumerate(zip(avg_obs_by_comp, avg_null_by_comp)):
+        diff = null - obs
+        print(f"    {i+1:2d}    | {np.degrees(obs):6.1f}°  | {np.degrees(null):6.1f}° | {np.degrees(diff):+6.1f}°")
+    
+    # 4. Find intersection points
+    print("\n4. INTERSECTION ANALYSIS:")
+    intersections = []
+    
+    for i in range(len(avg_obs_by_comp) - 1):
+        obs_current, obs_next = avg_obs_by_comp[i], avg_obs_by_comp[i+1]
+        null_current, null_next = avg_null_by_comp[i], avg_null_by_comp[i+1]
+        
+        # Check if lines cross between these components
+        if ((obs_current < null_current and obs_next > null_next) or 
+            (obs_current > null_current and obs_next < null_next)):
+            intersections.append(i + 1)  # Between component i+1 and i+2
+            print(f"   Intersection between components {i+1} and {i+2}")
+    
+    if not intersections:
+        print("   No intersections found in middle components")
+        
+        # Check if they would intersect beyond the range
+        if avg_obs_by_comp[-1] < avg_null_by_comp[-1]:
+            print("   Observed < Null at final component (would intersect later)")
+        else:
+            print("   Observed > Null at final component (intersected earlier?)")
+    
+    # 5. Check for implementation issues
+    print("\n5. POTENTIAL ISSUES:")
+    
+    # Issue A: Are null angles too high?
+    expected_null_mean = np.pi/4  # ~45° for random subspaces
+    actual_null_mean = np.mean(avg_null_by_comp)
+    
+    print(f"   Expected null mean: ~{np.degrees(expected_null_mean):.1f}°")
+    print(f"   Actual null mean: {np.degrees(actual_null_mean):.1f}°")
+    
+    if actual_null_mean > 1.2 * expected_null_mean:
+        print("   ⚠️  NULL ANGLES SUSPICIOUSLY HIGH")
+    
+    # Issue B: Are observed angles showing unexpected patterns?
+    obs_range = np.max(avg_obs_by_comp) - np.min(avg_obs_by_comp)
+    print(f"   Observed angle range: {np.degrees(obs_range):.1f}°")
+    
+    if obs_range > np.pi/6:  # >30°
+        print("   ⚠️  LARGE VARIATION IN OBSERVED ANGLES ACROSS COMPONENTS")
+    
+    # Issue C: Are there enough gesture pairs?
+    print(f"   Number of gesture pairs: {len(gesture_pairs)}")
+    if len(gesture_pairs) < 5:
+        print("   ⚠️  FEW GESTURE PAIRS - AVERAGING MAY BE UNSTABLE")
+    
+    return {
+        'avg_observed': avg_obs_by_comp,
+        'avg_null': avg_null_by_comp,
+        'intersections': intersections
+    }
+
+def verify_null_generation(n_channels=100, n_components=20, n_surrogates=1000):
+    """Verify that null angle generation is working correctly"""
+    
+    print("\n" + "="*60)
+    print("VERIFYING NULL ANGLE GENERATION")
+    print("="*60)
+    
+    null_angles = []
+    for i in range(n_surrogates):
+        Q1, _ = np.linalg.qr(np.random.randn(n_channels, n_components))
+        Q2, _ = np.linalg.qr(np.random.randn(n_channels, n_components))
+        
+        # This is how your code computes angles
+        from analysis.principal_angles import compute_principal_angles
+        angles, _ = compute_principal_angles(Q1, Q2)
+        null_angles.append(angles)
+    
+    null_angles = np.array(null_angles)
+    mean_by_comp = np.mean(null_angles, axis=0)
+    
+    print(f"Mean null angles by component: {[f'{np.degrees(a):.1f}°' for a in mean_by_comp]}")
+    print(f"Overall mean: {np.degrees(np.mean(mean_by_comp)):.1f}°")
+    print(f"Expected for random subspaces: ~45-60°")
+    print(f"Standard deviation: {np.degrees(np.std(mean_by_comp)):.1f}°")
+    
+    if np.degrees(np.mean(mean_by_comp)) > 70:
+        print("⚠️  NULL ANGLES TOO HIGH - POTENTIAL ISSUE")
+    elif np.degrees(np.mean(mean_by_comp)) < 30:
+        print("⚠️  NULL ANGLES TOO LOW - POTENTIAL ISSUE")
+    else:
+        print("✓  NULL ANGLES IN EXPECTED RANGE")
+    
+    return mean_by_comp
+
+### visualization tme control tests
 
 def create_enhanced_tme_visualization(test_results, output_dir=None):
     """
@@ -695,6 +865,12 @@ def create_enhanced_tme_visualization(test_results, output_dir=None):
     - Colored lines: Observed angles for each gesture pair across components
     - Black dotted line: TME null mean angles for each component
     """
+    # ================================================
+    print("\n🔍 RUNNING DEBUG ANALYSIS...")
+    debug_info = debug_tme_intersection(test_results)
+    print("🔍 DEBUG ANALYSIS COMPLETE")
+    # ================================================
+
     subject_id = test_results['subject_id']
     band_name = test_results['band_name']
     gesture_pairs = test_results['gesture_pairs']
@@ -773,7 +949,6 @@ def create_enhanced_tme_visualization(test_results, output_dir=None):
     else:
         plt.show()
 
-
 def create_aggregate_enhanced_visualization(enhanced_results, output_dir):
     """
     Create aggregate visualization across all subjects showing component-wise patterns.
@@ -793,25 +968,63 @@ def create_aggregate_enhanced_visualization(enhanced_results, output_dir):
         n_components = None
         
         for subject_id, results in band_results.items():
-            n_components = results['n_components']
+            # Get actual number of components from the data
+            actual_n_components = results['n_components']
             
+            if n_components is None:
+                n_components = actual_n_components
+            elif n_components != actual_n_components:
+                print(f"WARNING: Subject {subject_id} has {actual_n_components} components, but others have {n_components}")
+                # Use the minimum to avoid index errors
+                n_components = min(n_components, actual_n_components)
+        
+        # Ensure we don't exceed available components
+        if n_components is None:
+            print("No valid results found for aggregate visualization")
+            continue
+            
+        print(f"Using {n_components} components for aggregate visualization")
+        
+        # Now collect data with the correct number of components
+        for subject_id, results in band_results.items():
             # Get observed angles across components (average across gesture pairs)
             subject_observed_per_comp = []
             subject_null_per_comp = []
             
-            for comp_idx in range(n_components):
+            # Only iterate over available components
+            for comp_idx in range(min(n_components, len(results['observed_angles'][results['gesture_pairs'][0]]))):
                 # Average across gesture pairs for this component
-                comp_observed = [results['observed_angles'][pair][comp_idx] for pair in results['gesture_pairs']]
-                comp_null = [results['component_wise_null_stats'][pair]['null_mean_per_component'][comp_idx] 
-                           for pair in results['gesture_pairs']]
+                comp_observed = []
+                comp_null = []
                 
-                subject_observed_per_comp.append(np.mean(comp_observed))
-                subject_null_per_comp.append(np.mean(comp_null))
+                for pair in results['gesture_pairs']:
+                    # Check if this component index exists for this pair
+                    if comp_idx < len(results['observed_angles'][pair]):
+                        comp_observed.append(results['observed_angles'][pair][comp_idx])
+                    
+                    if comp_idx < len(results['component_wise_null_stats'][pair]['null_mean_per_component']):
+                        comp_null.append(results['component_wise_null_stats'][pair]['null_mean_per_component'][comp_idx])
+                
+                if comp_observed and comp_null:  # Only add if we have data
+                    subject_observed_per_comp.append(np.mean(comp_observed))
+                    subject_null_per_comp.append(np.mean(comp_null))
             
-            all_observed_per_component.append(subject_observed_per_comp)
-            all_null_per_component.append(subject_null_per_comp)
+            if subject_observed_per_comp:  # Only add if subject has valid data
+                all_observed_per_component.append(subject_observed_per_comp)
+                all_null_per_component.append(subject_null_per_comp)
         
-        # Convert to arrays
+        if not all_observed_per_component:
+            print(f"No valid data for {band_name} band aggregate visualization")
+            continue
+        
+        # Convert to arrays and ensure consistent shapes
+        min_components = min(len(obs) for obs in all_observed_per_component)
+        n_components = min_components  # Update to actual usable components
+        
+        # Trim all arrays to the same length
+        all_observed_per_component = [obs[:n_components] for obs in all_observed_per_component]
+        all_null_per_component = [null[:n_components] for null in all_null_per_component]
+        
         all_observed_per_component = np.array(all_observed_per_component)  # (n_subjects, n_components)
         all_null_per_component = np.array(all_null_per_component)  # (n_subjects, n_components)
         
@@ -876,3 +1089,4 @@ def create_aggregate_enhanced_visualization(enhanced_results, output_dir):
             plt.savefig(os.path.join(output_dir, filename), dpi=300, bbox_inches='tight')
             print(f"Aggregate enhanced visualization saved: {filename}")
             plt.close()
+
