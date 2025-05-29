@@ -12,7 +12,8 @@ from .manifold import (
     plot_neural_vaf,
     create_gesture_comparison_summary,
     compute_gesture_manifolds,
-    align_subject_manifolds_with_cca
+    align_subject_manifolds_with_cca,
+    extract_region_from_channel
 )
 from .high_dim_manifold import (
     analyze_high_dim_neural_manifolds,
@@ -617,3 +618,112 @@ def cross_region_lfo_classification_analysis(args, all_region_results):
     print(f"\nBox plot visualization saved to {os.path.join(cross_region_dir, 'region_pairwise_boxplot.png')}")
     
     return region_comparison
+
+# Spatial Loadings Analysis
+
+def save_spatial_loadings(manifold_dict, region_channels_dict, band_name, 
+                         n_modes=3, output_dir=None):
+    """
+    Save spatial loadings (PCA component weights) for each channel to text files.
+    
+    Parameters:
+    -----------
+    manifold_dict : dict
+        Dictionary containing manifold results for subjects
+    region_channels_dict : dict
+        Dictionary mapping subject IDs to channel names
+    band_name : str
+        Name of the frequency band
+    n_modes : int, optional
+        Number of neural modes to save (default: 3)
+    output_dir : str, optional
+        Directory to save text files. If None, saves to current directory.
+    
+    Returns:
+    --------
+    saved_files : list
+        List of saved file paths
+    """
+    saved_files = []
+    
+    print(f"\nSaving spatial loadings for first {n_modes} neural modes...")
+    
+    # Process each subject
+    for subject_id, results in manifold_dict.items():
+        print(f"Processing Subject {subject_id}...")
+        
+        # Get spatial patterns and channel names
+        spatial_patterns = results['spatial_patterns']  # (n_channels, n_components)
+        channel_names = region_channels_dict[subject_id]
+        explained_variance = results['explained_variance']
+        
+        # Extract first n_modes
+        n_channels, n_components = spatial_patterns.shape
+        n_modes_to_save = min(n_modes, n_components)
+        
+        # Create output filename
+        if output_dir is not None:
+            os.makedirs(output_dir, exist_ok=True)
+            filename = os.path.join(output_dir, f'spatial_loadings_subject_{subject_id}_{band_name}.txt')
+        else:
+            filename = f'spatial_loadings_subject_{subject_id}_{band_name}.txt'
+        
+        # Write to text file
+        with open(filename, 'w') as f:
+            # Write header
+            f.write(f"Spatial Loadings for Subject {subject_id}, {band_name.upper()} Band\n")
+            f.write(f"Neural Manifold Analysis - First {n_modes_to_save} Components\n")
+            f.write("="*70 + "\n\n")
+            
+            # Write explained variance for each component
+            f.write("Explained Variance:\n")
+            for i in range(n_modes_to_save):
+                f.write(f"  Component {i+1}: {explained_variance[i]*100:.2f}%\n")
+            f.write(f"  Total (first {n_modes_to_save}): {sum(explained_variance[:n_modes_to_save])*100:.2f}%\n\n")
+            
+            # Write column headers
+            header = "Channel_Name\tRegion"
+            for i in range(n_modes_to_save):
+                header += f"\tMode_{i+1}_Weight"
+            f.write(header + "\n")
+            
+            # Write data for each channel
+            for ch_idx, channel_name in enumerate(channel_names):
+                # Extract region from channel name
+                region = extract_region_from_channel(channel_name)
+                
+                # Start line with channel name and region
+                line = f"{channel_name}\t{region}"
+                
+                # Add weights for each mode
+                for mode_idx in range(n_modes_to_save):
+                    weight = spatial_patterns[ch_idx, mode_idx]
+                    line += f"\t{weight:.6f}"
+                
+                f.write(line + "\n")
+            
+            # Write summary statistics
+            f.write(f"\n" + "="*70 + "\n")
+            f.write("SUMMARY STATISTICS\n")
+            f.write("="*70 + "\n\n")
+            
+            for mode_idx in range(n_modes_to_save):
+                weights = spatial_patterns[:, mode_idx]
+                f.write(f"Neural Mode {mode_idx + 1}:\n")
+                f.write(f"  Mean absolute weight: {np.mean(np.abs(weights)):.4f}\n")
+                f.write(f"  Max weight: {np.max(weights):.4f}\n")
+                f.write(f"  Min weight: {np.min(weights):.4f}\n")
+                f.write(f"  Standard deviation: {np.std(weights):.4f}\n")
+                
+                # Find channels with highest positive and negative weights
+                max_idx = np.argmax(weights)
+                min_idx = np.argmin(weights)
+                f.write(f"  Highest positive: {channel_names[max_idx]} ({weights[max_idx]:.4f})\n")
+                f.write(f"  Highest negative: {channel_names[min_idx]} ({weights[min_idx]:.4f})\n\n")
+        
+        saved_files.append(filename)
+        print(f"  Saved: {filename}")
+    
+    print(f"\nSpatial loadings saved for {len(saved_files)} subjects")
+    return saved_files
+
