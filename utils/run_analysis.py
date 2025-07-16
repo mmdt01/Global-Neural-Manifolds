@@ -9,33 +9,34 @@ from scipy.stats import sem
 from utils.helpers import ensure_dir
 from analysis import (
     perform_time_frequency_analysis,
-    analyze_neural_manifolds,
-    analyze_gesture_manifolds,
-    compare_subject_manifolds,
-    analyze_high_dim_neural_manifolds,
-    align_high_dim_manifolds,
-    align_cross_region_manifolds,
-    compute_region_similarity_matrix,
-    analyze_mode_specific_correlations,
-    compare_within_vs_cross_region_correlations,
     analyze_mean_delta_activity,
     compute_gesture_mean_activity,
     analyze_gesture_classification,
     cross_region_lfo_classification_analysis,
-    compute_cross_gesture_vaf_analysis,
-    visualize_cross_vaf_results,
-    save_spatial_loadings
+    analyze_neural_manifolds,
+    save_spatial_loadings,
+    run_manifold_similarity_analysis,
+    run_enhanced_tme_analysis,
+    compute_cross_gesture_vaf_analysis
+    ## all below not used
+    # analyze_gesture_manifolds,
+    # compare_subject_manifolds,
+    # analyze_high_dim_neural_manifolds,
+    # align_high_dim_manifolds,
+    # align_cross_region_manifolds,
+    # compute_region_similarity_matrix,
+    # analyze_mode_specific_correlations,
+    # compare_within_vs_cross_region_correlations
 )
 
 from visualization import (
+    visualize_gesture_tsne,
     plot_tf_summary,
-    visualize_canonical_correlations,
-    visualize_mode_correlations,
-    visualize_cross_region_correlations,
-    visualize_gesture_tsne
+    visualize_cross_vaf_results
+    # visualize_canonical_correlations,
+    # visualize_mode_correlations,
+    # visualize_cross_region_correlations
 )
-# Import the principal angles functions
-from analysis.tme_manifold_integration import run_enhanced_tme_analysis
 
 def run_region_analyses(args, region_epochs, region_channels_dict, region_labels, group_name,
                         subject_id_list, event_dict_gest, mapping_events, frequency_bands,
@@ -494,8 +495,6 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
             print(f"\n{'='*60}")
             print("COMPUTING PRINCIPAL ANGLES (ONCE)")
             print(f"{'='*60}")
-            
-            from analysis.principal_angles import run_manifold_similarity_analysis
             
             n_similarity_components = getattr(args, 'similarity_components', 20)
             print(f"Using {n_similarity_components} components for similarity analysis")

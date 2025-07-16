@@ -518,3 +518,81 @@ def visualize_gesture_tsne(epochs_dict, subject_id=None, region_label=None,
     
     return results
 
+def visualize_cross_vaf_results(results, output_dir=None):
+    """
+    Create visualizations of cross-gesture VAF analysis.
+    
+    Parameters:
+    -----------
+    results : dict
+        Results from compute_cross_gesture_vaf_analysis
+    output_dir : str, optional
+        Directory to save plots
+    """
+    if results is None:
+        return
+    
+    subject_id = results['subject_id']
+    band_name = results['band_name']
+    gesture_names = results['gesture_names']
+    
+    # Create figure with subplots
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    
+    # Plot 1: Ratio Matrix Heatmap
+    ax1 = axes[0]
+    
+    im = ax1.imshow(results['ratio_matrix'], cmap='viridis', vmin=0, vmax=1)
+    
+    # Add text annotations
+    for i in range(len(gesture_names)):
+        for j in range(len(gesture_names)):
+            ratio = results['ratio_matrix'][i, j]
+            color = 'white' if ratio < 0.5 else 'black'
+            ax1.text(j, i, f'{ratio:.2f}', ha='center', va='center', color=color, fontweight='bold')
+    
+    ax1.set_xticks(range(len(gesture_names)))
+    ax1.set_yticks(range(len(gesture_names)))
+    ax1.set_xticklabels([g.capitalize() for g in gesture_names], rotation=45)
+    ax1.set_yticklabels([g.capitalize() for g in gesture_names])
+    ax1.set_xlabel('Project ONTO (Target Manifold)')
+    ax1.set_ylabel('Project FROM (Source Data)')
+    ax1.set_title(f'Cross-Gesture VAF Ratios\nSubject {subject_id}, {band_name} Band')
+    
+    # Add colorbar
+    cbar = plt.colorbar(im, ax=ax1)
+    cbar.set_label('VAF Ratio (Cross/Within)')
+    
+    # Plot 2: Distribution Comparison
+    ax2 = axes[1]
+    
+    # Plot histograms
+    ax2.hist(results['control_ratios'], bins=30, alpha=0.7, color='gray', 
+            label=f"Random Control\n(n={len(results['control_ratios'])})", density=True)
+    ax2.hist(results['observed_ratios'], bins=15, alpha=0.8, color='blue',
+            label=f"Cross-Gesture\n(n={len(results['observed_ratios'])})", density=True)
+    
+    # Add vertical lines for means
+    ax2.axvline(results['statistics']['mean_control'], color='gray', linestyle='--', linewidth=2,
+               label=f"Control Mean: {results['statistics']['mean_control']:.3f}")
+    ax2.axvline(results['statistics']['mean_observed'], color='blue', linestyle='--', linewidth=2,
+               label=f"Observed Mean: {results['statistics']['mean_observed']:.3f}")
+    
+    ax2.set_xlabel('VAF Ratio (Cross/Within)')
+    ax2.set_ylabel('Density')
+    ax2.set_title(f'Cross-Gesture vs Control Ratios\np = {results["statistics"]["p_value"]:.2e}')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    # Save or show
+    if output_dir is not None:
+        filename = f'cross_vaf_analysis_subject_{subject_id}_{band_name}.png'
+        plt.savefig(os.path.join(output_dir, filename), dpi=300, bbox_inches='tight')
+        print(f"Cross-VAF visualization saved: {filename}")
+        plt.close()
+    else:
+        plt.show()
+    
+    return fig
