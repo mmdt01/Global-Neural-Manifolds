@@ -32,7 +32,7 @@ from analysis import (
 from visualization import (
     visualize_gesture_tsne,
     plot_tf_summary,
-    visualize_cross_vaf_results
+    visualize_cross_vaf_results,
     # visualize_canonical_correlations,
     # visualize_mode_correlations,
     # visualize_cross_region_correlations
@@ -628,152 +628,156 @@ def run_region_analyses(args, region_epochs, region_channels_dict, region_labels
         
         print(f"Manifold analysis completed for {group_name}")
     
-    if args.analysis in ['gesture-manifolds', 'all']:
-        print(f"\nAnalyzing gesture-specific neural manifolds for {group_name}...")
-        output_dir = None if args.plot else group_gesture_dir
-        gesture_manifold_results = analyze_gesture_manifolds(
-            region_epochs,
-            region_channels_dict,
-            region_labels,
-            bands=['delta', 'beta', 'high_gamma'],
-            gestures=list(event_dict_gest.keys()),
-            n_components=3,
-            downsample_factor=1,
-            output_dir=output_dir
-        )
+
+
+
+    # # old analysis
+    # if args.analysis in ['gesture-manifolds', 'all']:
+    #     print(f"\nAnalyzing gesture-specific neural manifolds for {group_name}...")
+    #     output_dir = None if args.plot else group_gesture_dir
+    #     gesture_manifold_results = analyze_gesture_manifolds(
+    #         region_epochs,
+    #         region_channels_dict,
+    #         region_labels,
+    #         bands=['delta', 'beta', 'high_gamma'],
+    #         gestures=list(event_dict_gest.keys()),
+    #         n_components=3,
+    #         downsample_factor=1,
+    #         output_dir=output_dir
+    #     )
     
-    # Include cca manifold aligning as a analysis parameter
-    if args.analysis in ['align-manifolds', 'all']:
-        print(f"\nComputing general manifolds and aligning using CCA for {group_name}...")
-        output_dir = None if args.plot else group_align_dir
-        # step 1: compute overall manifold
-        print("... Step 1: computing neural manifolds ...")
-        manifold_results = analyze_neural_manifolds(
-            region_epochs,
-            region_channels_dict,
-            region_labels,
-            frequency_bands,
-            n_components=3,
-            downsample_factor=1,
-            output_dir=output_dir
-        )
-        # step 2: align and compare manifolds between subjects
-        print("... Step 2: aligning manifolds across subjects using CCA ...")
-        cca_results = compare_subject_manifolds(
-            manifold_results,
-            subject_id_list, 
-            frequency_bands,
-            output_dir=output_dir
-        )
-        # step 3: visualize the CCA results
-        print("... Step 3: visualizing the CCA results ...")
-        visualize_canonical_correlations(
-            cca_results, 
-            frequency_bands,
-            output_dir=output_dir
-        )
+    # # Include cca manifold aligning as a analysis parameter
+    # if args.analysis in ['align-manifolds', 'all']:
+    #     print(f"\nComputing general manifolds and aligning using CCA for {group_name}...")
+    #     output_dir = None if args.plot else group_align_dir
+    #     # step 1: compute overall manifold
+    #     print("... Step 1: computing neural manifolds ...")
+    #     manifold_results = analyze_neural_manifolds(
+    #         region_epochs,
+    #         region_channels_dict,
+    #         region_labels,
+    #         frequency_bands,
+    #         n_components=3,
+    #         downsample_factor=1,
+    #         output_dir=output_dir
+    #     )
+    #     # step 2: align and compare manifolds between subjects
+    #     print("... Step 2: aligning manifolds across subjects using CCA ...")
+    #     cca_results = compare_subject_manifolds(
+    #         manifold_results,
+    #         subject_id_list, 
+    #         frequency_bands,
+    #         output_dir=output_dir
+    #     )
+    #     # step 3: visualize the CCA results
+    #     print("... Step 3: visualizing the CCA results ...")
+    #     visualize_canonical_correlations(
+    #         cca_results, 
+    #         frequency_bands,
+    #         output_dir=output_dir
+    #     )
 
-    if args.analysis in ['high-dim-alignment', 'all']:
-        print(f"\nRunning high-dimensional manifold alignment ({args.high_dim_components} components) for {group_name}...")
-        high_dim_dir = os.path.join(args.output_dir, 'high_dim_manifolds')
-        ensure_dir(high_dim_dir)
+    # if args.analysis in ['high-dim-alignment', 'all']:
+    #     print(f"\nRunning high-dimensional manifold alignment ({args.high_dim_components} components) for {group_name}...")
+    #     high_dim_dir = os.path.join(args.output_dir, 'high_dim_manifolds')
+    #     ensure_dir(high_dim_dir)
         
-        # Create region-specific output directory
-        group_high_dim_dir = os.path.join(high_dim_dir, group_name)
-        ensure_dir(group_high_dim_dir)
+    #     # Create region-specific output directory
+    #     group_high_dim_dir = os.path.join(high_dim_dir, group_name)
+    #     ensure_dir(group_high_dim_dir)
         
-        # Set output directory based on interactive plotting preference
-        output_dir = None if args.plot else group_high_dim_dir
+    #     # Set output directory based on interactive plotting preference
+    #     output_dir = None if args.plot else group_high_dim_dir
         
-        # Step 1: compute high-dimensional neural manifolds
-        print("... Step 1: computing high-dimensional neural manifolds ...")
-        manifold_results = analyze_high_dim_neural_manifolds(
-            region_epochs,
-            region_channels_dict,
-            region_labels,
-            frequency_bands,
-            n_components=args.high_dim_components,
-            downsample_factor=1,
-            output_dir=output_dir
-        )
+    #     # Step 1: compute high-dimensional neural manifolds
+    #     print("... Step 1: computing high-dimensional neural manifolds ...")
+    #     manifold_results = analyze_high_dim_neural_manifolds(
+    #         region_epochs,
+    #         region_channels_dict,
+    #         region_labels,
+    #         frequency_bands,
+    #         n_components=args.high_dim_components,
+    #         downsample_factor=1,
+    #         output_dir=output_dir
+    #     )
         
-        # Step 2: align manifolds between subjects
-        print("... Step 2: aligning high-dimensional manifolds across subjects using CCA ...")
-        cca_results = align_high_dim_manifolds(
-            manifold_results,
-            subject_id_list, 
-            frequency_bands,
-            output_dir=output_dir
-        )
+    #     # Step 2: align manifolds between subjects
+    #     print("... Step 2: aligning high-dimensional manifolds across subjects using CCA ...")
+    #     cca_results = align_high_dim_manifolds(
+    #         manifold_results,
+    #         subject_id_list, 
+    #         frequency_bands,
+    #         output_dir=output_dir
+    #     )
         
-        # Step 3: visualize the mode-specific correlations
-        print("... Step 3: visualizing the mode-specific correlations ...")
-        visualize_mode_correlations(
-            cca_results, 
-            frequency_bands,
-            output_dir=output_dir
-        )
+    #     # Step 3: visualize the mode-specific correlations
+    #     print("... Step 3: visualizing the mode-specific correlations ...")
+    #     visualize_mode_correlations(
+    #         cca_results, 
+    #         frequency_bands,
+    #         output_dir=output_dir
+    #     )
 
-    if args.analysis in ['cross-region-alignment', 'all'] and group_name != "brain_wide":
-        print(f"\nRunning cross-region manifold alignment analysis...")
+    # if args.analysis in ['cross-region-alignment', 'all'] and group_name != "brain_wide":
+    #     print(f"\nRunning cross-region manifold alignment analysis...")
         
-        # Check if we have at least 2 regions for comparison
-        if len(all_region_epochs) < 2:
-            print("ERROR: Cross-region alignment requires at least 2 regions. Please provide multiple regions using --regions.")
-        else:
-            # Create output directory
-            cross_region_dir = os.path.join(args.output_dir, 'cross_region_manifolds')
-            ensure_dir(cross_region_dir)
+    #     # Check if we have at least 2 regions for comparison
+    #     if len(all_region_epochs) < 2:
+    #         print("ERROR: Cross-region alignment requires at least 2 regions. Please provide multiple regions using --regions.")
+    #     else:
+    #         # Create output directory
+    #         cross_region_dir = os.path.join(args.output_dir, 'cross_region_manifolds')
+    #         ensure_dir(cross_region_dir)
             
-            # Set output directory based on interactive plotting preference
-            output_dir = None if args.plot else cross_region_dir
+    #         # Set output directory based on interactive plotting preference
+    #         output_dir = None if args.plot else cross_region_dir
             
-            # Step 1: Align manifolds across regions and subjects
-            print("... Step 1: aligning neural manifolds across regions and subjects ...")
-            cross_region_results, region_manifold_results = align_cross_region_manifolds(
-                all_region_epochs,
-                all_region_channels_dict,
-                all_region_epochs.keys(),  # Use all regions we have
-                bands=frequency_bands,
-                n_components=args.cross_region_components,
-                downsample_factor=1,
-                output_dir=output_dir
-            )
+    #         # Step 1: Align manifolds across regions and subjects
+    #         print("... Step 1: aligning neural manifolds across regions and subjects ...")
+    #         cross_region_results, region_manifold_results = align_cross_region_manifolds(
+    #             all_region_epochs,
+    #             all_region_channels_dict,
+    #             all_region_epochs.keys(),  # Use all regions we have
+    #             bands=frequency_bands,
+    #             n_components=args.cross_region_components,
+    #             downsample_factor=1,
+    #             output_dir=output_dir
+    #         )
             
-            # Step 2: Compute region similarity matrices
-            print("... Step 2: computing region similarity matrices ...")
-            similarity_matrices = compute_region_similarity_matrix(
-                cross_region_results,
-                bands=frequency_bands,
-                method='mean'
-            )
+    #         # Step 2: Compute region similarity matrices
+    #         print("... Step 2: computing region similarity matrices ...")
+    #         similarity_matrices = compute_region_similarity_matrix(
+    #             cross_region_results,
+    #             bands=frequency_bands,
+    #             method='mean'
+    #         )
             
-            # Step 3: Analyze mode-specific correlations
-            print("... Step 3: analyzing mode-specific correlations ...")
-            mode_correlations = analyze_mode_specific_correlations(
-                cross_region_results,
-                bands=frequency_bands,
-                n_modes=args.cross_region_components
-            )
+    #         # Step 3: Analyze mode-specific correlations
+    #         print("... Step 3: analyzing mode-specific correlations ...")
+    #         mode_correlations = analyze_mode_specific_correlations(
+    #             cross_region_results,
+    #             bands=frequency_bands,
+    #             n_modes=args.cross_region_components
+    #         )
             
-            # Step 4: Compare within-region vs cross-region correlations
-            print("... Step 4: comparing within-region vs cross-region correlations ...")
-            comparison_results = compare_within_vs_cross_region_correlations(
-                mode_correlations,
-                bands=frequency_bands,
-                n_modes=args.cross_region_components
-            )
+    #         # Step 4: Compare within-region vs cross-region correlations
+    #         print("... Step 4: comparing within-region vs cross-region correlations ...")
+    #         comparison_results = compare_within_vs_cross_region_correlations(
+    #             mode_correlations,
+    #             bands=frequency_bands,
+    #             n_modes=args.cross_region_components
+    #         )
             
-            # Step 5: Visualize the results
-            print("... Step 5: visualizing cross-region correlation results ...")
-            visualize_cross_region_correlations(
-                cross_region_results,
-                similarity_matrices,
-                mode_correlations,
-                comparison_results,
-                bands=frequency_bands,
-                output_dir=output_dir
-            )
+    #         # Step 5: Visualize the results
+    #         print("... Step 5: visualizing cross-region correlation results ...")
+    #         visualize_cross_region_correlations(
+    #             cross_region_results,
+    #             similarity_matrices,
+    #             mode_correlations,
+    #             comparison_results,
+    #             bands=frequency_bands,
+    #             output_dir=output_dir
+    #         )
 
 
 
